@@ -20,10 +20,9 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 struct Record {
+    name: String,
     primer: String,
-    left: String,
-    right: String,
-    index: String,
+    index: u32,
     reference: String,
 }
 
@@ -40,12 +39,7 @@ fn main() {
     let mut csv = csv::Reader::from_reader(File::open(args.value_of("primers").unwrap()).unwrap());
     for result in csv.deserialize() {
         let record: Record = result.unwrap();
-        println!("{:?}", record);
-        //y        let key = record.c[..21];
-        let primer = (
-            String::from(&record.left[..20]),
-            String::from(&record.right[..20]),
-        );
+        let primer = String::from(&record.primer[..20]);
         primers.insert(primer, 0);
     }
 
@@ -64,13 +58,11 @@ fn main() {
         match (record1, record2) {
             (Ok(r1), Ok(r2)) => {
                 total_pairs += 1;
-                let primer = (
-                    String::from_utf8(r1.seq()[..20].to_vec()).unwrap(),
-                    String::from_utf8(r2.seq()[..20].to_vec()).unwrap(),
-                );
-                match primers.get(&primer) {
-                    Some(_) => matched += 1,
-                    None => (),
+                let p1 = String::from_utf8(r1.seq()[..20].to_vec()).unwrap();
+                let p2 = String::from_utf8(r2.seq()[..20].to_vec()).unwrap();
+                match (primers.get(&p1), primers.get(&p2)) {
+                    (Some(_), Some(_)) => matched += 1,
+                    _ => (),
                 }
             }
             _ => eprintln!("Not proper fastq file pair"),
