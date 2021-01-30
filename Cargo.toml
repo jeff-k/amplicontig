@@ -1,0 +1,10 @@
+[package]
+name = "extract-amplicons"
+version = "0.1.0"
+authors = ["jeff-k <jeff_k@fastmail.com>"]
+edition = "2018"
+
+[dependencies]
+bio = "*"
+clap = "*"
+flate2 = "*"
