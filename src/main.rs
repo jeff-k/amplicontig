@@ -37,9 +37,24 @@ fn printrec(r: &Record, pname: &str) {
 fn main() {
     let args = App::new("extract-amplicons")
         .version("0.1.0")
-        .arg(Arg::with_name("primers").index(1))
-        .arg(Arg::with_name("R1").index(2))
-        .arg(Arg::with_name("R2").index(3))
+        .arg(
+            Arg::with_name("primers")
+                .index(1)
+                .help("csv file for primer set"),
+        )
+        .arg(Arg::with_name("R1").index(2).help("first reads in pairs"))
+        .arg(
+            Arg::with_name("R2")
+                .index(3)
+                .help("second reads in pairs (reversed)"),
+        )
+        .arg(
+            Arg::with_name("invert")
+                .short("n")
+                .required(false)
+                .takes_value(false)
+                .help("invert selection (show unmatching reads)"),
+        )
         .get_matches();
 
     let mut primers = HashMap::new();
@@ -63,7 +78,7 @@ fn main() {
 
     let mut total_pairs = 0;
     let mut matched = 0;
-    let grep = false;
+    let invert = args.is_present("invert");
     for (record1, record2) in fq1.zip(fq2) {
         match (record1, record2) {
             (Ok(r1), Ok(r2)) => {
@@ -72,7 +87,7 @@ fn main() {
                 let p2 = String::from_utf8(r2.seq()[..20].to_vec()).unwrap();
                 match (primers.get(&p1), primers.get(&p2)) {
                     (Some(p1name), Some(p2name)) => {
-                        if grep {
+                        if !(invert) {
                             printrec(&r1, p1name);
                             printrec(&r2, p2name);
                         };
@@ -80,14 +95,14 @@ fn main() {
                     }
                     (Some(p1name), None) => {
                         *off_target.entry(p2).or_insert(0) += 1;
-                        if !(grep) {
+                        if invert {
                             printrec(&r1, p1name);
                             print!("{}", r2);
                         }
                     }
                     (None, Some(p2name)) => {
                         *off_target.entry(p1).or_insert(0) += 1;
-                        if !(grep) {
+                        if invert {
                             print!("{}", r1);
                             printrec(&r2, p2name);
                         }
@@ -96,7 +111,7 @@ fn main() {
                         *off_target.entry(p1).or_insert(0) += 1;
                         *off_target.entry(p2).or_insert(0) += 1;
 
-                        if !(grep) {
+                        if invert {
                             print!("{}", r1);
                             print!("{}", r2);
                         }
