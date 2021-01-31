@@ -25,7 +25,6 @@ ARGS:
 
 ```
 $ cargo build --release
-$ target/release/extra
 ```
 
 ### Examples
