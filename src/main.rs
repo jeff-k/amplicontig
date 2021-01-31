@@ -55,10 +55,18 @@ fn main() {
                 .takes_value(false)
                 .help("invert selection (show unmatching reads)"),
         )
+        .arg(
+            Arg::with_name("stats")
+                .short("s")
+                .required(false)
+                .takes_value(false)
+                .help("print stats about primer performance"),
+        )
         .get_matches();
 
     let mut primers = HashMap::new();
     let mut off_target = HashMap::new();
+    let mut on_target = HashMap::new();
 
     let mut csv = csv::Reader::from_reader(File::open(args.value_of("primers").unwrap()).unwrap());
     for result in csv.deserialize() {
@@ -78,6 +86,7 @@ fn main() {
 
     let mut total_pairs = 0;
     let mut matched = 0;
+    let grep = !(args.is_present("stats"));
     let invert = args.is_present("invert");
     for (record1, record2) in fq1.zip(fq2) {
         match (record1, record2) {
@@ -87,22 +96,25 @@ fn main() {
                 let p2 = String::from_utf8(r2.seq()[..20].to_vec()).unwrap();
                 match (primers.get(&p1), primers.get(&p2)) {
                     (Some(p1name), Some(p2name)) => {
-                        if !(invert) {
+                        if !(invert) & grep {
                             printrec(&r1, p1name);
                             printrec(&r2, p2name);
                         };
+                        *on_target
+                            .entry(format!("{}:{}", p1name, p2name))
+                            .or_insert(0) += 1;
                         matched += 1
                     }
                     (Some(p1name), None) => {
                         *off_target.entry(p2).or_insert(0) += 1;
-                        if invert {
+                        if invert & grep {
                             printrec(&r1, p1name);
                             print!("{}", r2);
                         }
                     }
                     (None, Some(p2name)) => {
                         *off_target.entry(p1).or_insert(0) += 1;
-                        if invert {
+                        if invert & grep {
                             print!("{}", r1);
                             printrec(&r2, p2name);
                         }
@@ -111,7 +123,7 @@ fn main() {
                         *off_target.entry(p1).or_insert(0) += 1;
                         *off_target.entry(p2).or_insert(0) += 1;
 
-                        if invert {
+                        if invert & grep {
                             print!("{}", r1);
                             print!("{}", r2);
                         }
@@ -121,6 +133,12 @@ fn main() {
             _ => eprintln!("Not proper fastq file pair"),
         }
     }
-    println!("{}/{}", matched, total_pairs);
-    println!("{:?}", off_target);
+    if !grep {
+        for (primer, count) in if invert { off_target } else { on_target } {
+            if count > 1000 {
+                println!("{}\t{}", primer, count);
+            }
+        }
+        eprintln!("{}/{} read pairs matched.", matched, total_pairs);
+    }
 }
