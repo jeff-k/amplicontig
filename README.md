@@ -2,7 +2,7 @@
 Extract Illumina read pairs that exactly match primer sequences
 
 ```
-$ extract-amplicons --help
+extract-amplicons --help
 extract-amplicons 0.1.0
 
 USAGE:
@@ -11,6 +11,7 @@ USAGE:
 FLAGS:
     -h, --help       Prints help information
     -n               invert selection (show unmatching reads)
+    -s               print stats about primer performance
     -V, --version    Prints version information
 
 ARGS:
