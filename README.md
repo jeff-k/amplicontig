@@ -1,6 +1,7 @@
 # extract-amplicons
 Extract Illumina read pairs that exactly match primer sequences
 
+### Synopsis
 ```
 extract-amplicons --help
 extract-amplicons 0.1.0
@@ -19,3 +20,14 @@ ARGS:
     <R1>         first reads in pairs
     <R2>         second reads in pairs (reversed)
 ```
+
+### Building
+
+```
+$ cargo build --release
+$ target/release/extra
+```
+
+### Examples
+
+`target/release/extract-amplicons -s artic-v3.csv ERR4659819_1.fastq.gz ERR4659819_2.fastq.gz`
