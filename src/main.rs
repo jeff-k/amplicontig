@@ -26,6 +26,14 @@ struct PrimerSet {
     reference: String,
 }
 
+fn printrec(r: &Record, pname: &str) {
+    let desc = format!("{}:{}", pname, r.desc().unwrap());
+    print!(
+        "{}",
+        Record::with_attrs(r.id(), Some(&desc), r.seq(), r.qual())
+    );
+}
+
 fn main() {
     let args = App::new("extract-amplicons")
         .version("0.1.0")
@@ -55,7 +63,7 @@ fn main() {
 
     let mut total_pairs = 0;
     let mut matched = 0;
-    let grep = true;
+    let grep = false;
     for (record1, record2) in fq1.zip(fq2) {
         match (record1, record2) {
             (Ok(r1), Ok(r2)) => {
@@ -65,30 +73,33 @@ fn main() {
                 match (primers.get(&p1), primers.get(&p2)) {
                     (Some(p1name), Some(p2name)) => {
                         if grep {
-                            let desc1 = format!("{}:{}", p1name, r1.desc().unwrap());
-                            print!(
-                                "{}",
-                                Record::with_attrs(r1.id(), Some(&desc1), r1.seq(), r1.qual())
-                            );
-
-                            let desc2 = format!("{}:{}", p2name, r2.desc().unwrap());
-                            print!(
-                                "{}",
-                                Record::with_attrs(r2.id(), Some(&desc2), r2.seq(), r2.qual())
-                            );
+                            printrec(&r1, p1name);
+                            printrec(&r2, p2name);
                         };
-
                         matched += 1
                     }
-                    (Some(_), None) => {
+                    (Some(p1name), None) => {
                         *off_target.entry(p2).or_insert(0) += 1;
+                        if !(grep) {
+                            printrec(&r1, p1name);
+                            print!("{}", r2);
+                        }
                     }
-                    (None, Some(_)) => {
+                    (None, Some(p2name)) => {
                         *off_target.entry(p1).or_insert(0) += 1;
+                        if !(grep) {
+                            print!("{}", r1);
+                            printrec(&r2, p2name);
+                        }
                     }
                     (None, None) => {
                         *off_target.entry(p1).or_insert(0) += 1;
                         *off_target.entry(p2).or_insert(0) += 1;
+
+                        if !(grep) {
+                            print!("{}", r1);
+                            print!("{}", r2);
+                        }
                     }
                 }
             }
