@@ -7,6 +7,7 @@ extern crate serde;
 use clap::{App, Arg};
 
 use bio::alignment::pairwise::*;
+use bio::alignment::AlignmentOperation::Match;
 use bio::io::fastq::{Reader, Record};
 
 use flate2::bufread::MultiGzDecoder;
@@ -66,8 +67,9 @@ fn main() {
         .get_matches();
 
     let mut primers = HashMap::new();
-    let mut off_target = HashMap::new();
-    let mut on_target = HashMap::new();
+    let mut off_target: HashMap<String, u32> = HashMap::new();
+    let mut on_target: HashMap<String, u32> = HashMap::new();
+    let mut full_match = HashMap::new();
 
     let mut csv = csv::Reader::from_reader(File::open(args.value_of("primers").unwrap()).unwrap());
     let mut readbins = HashMap::new();
@@ -107,17 +109,22 @@ fn main() {
                             printrec(&r1, p1name);
                             printrec(&r2, p2name);
                         };
-                        let seq = String::from_utf8(r1.seq()[20..].to_vec()).unwrap();
+                        let len = r1.seq().len();
+                        let limit = if len < 200 { len - 15 } else { 190 };
+                        let seq = String::from_utf8(r1.seq()[20..limit].to_vec()).unwrap();
                         *(readbins.get_mut(&String::from(p1name)).unwrap())
                             .entry(seq)
                             .or_insert(0) += 1;
-                        *on_target
+                        *full_match
                             .entry(format!("{}:{}", p1name, p2name))
                             .or_insert(0) += 1;
+                        *on_target.entry(p1name.to_string()).or_insert(0) += 1;
+                        *on_target.entry(p2name.to_string()).or_insert(0) += 1;
                         matched += 1
                     }
                     (Some(p1name), None) => {
                         *off_target.entry(p2).or_insert(0) += 1;
+                        *on_target.entry(p1name.to_string()).or_insert(0) += 1;
                         if invert & grep {
                             printrec(&r1, p1name);
                             print!("{}", r2);
@@ -125,6 +132,7 @@ fn main() {
                     }
                     (None, Some(p2name)) => {
                         *off_target.entry(p1).or_insert(0) += 1;
+                        *on_target.entry(p2name.to_string()).or_insert(0) += 1;
                         if invert & grep {
                             print!("{}", r1);
                             printrec(&r2, p2name);
@@ -145,24 +153,40 @@ fn main() {
         }
     }
     if !grep {
-        for (primer, count) in if invert { off_target } else { on_target } {
+        for (primer, count) in on_target {
+            if count > 1000 {
+                println!("{}\t{}", primer, count);
+            }
+        }
+        for (primer, count) in off_target {
             if count > 1000 {
                 println!("{}\t{}", primer, count);
             }
         }
         let score = |a: u8, b: u8| if a == b { 1i32 } else { -1i32 };
         for (primer, reads) in readbins {
-            println!("{}", primer);
+            print!("{}\n", primer);
             for (read, count) in reads {
                 if count > 500 {
                     //                    println!("\t{}", seqs.get(&primer).unwrap());
                     let r = seqs.get(&primer).unwrap().as_bytes();
                     let x = read.as_bytes();
-                    let mut aligner = Aligner::with_capacity(r.len(), x.len(), -5, -1, &score);
-                    let alignment = aligner.semiglobal(r, x);
-                    println!("depth: {}, score: {}", count, alignment.score);
-                    if alignment.score < 147 {
-                        println!("{}", alignment.pretty(r, x));
+                    let mut aligner = Aligner::with_capacity(x.len(), r.len(), -3, -1, &score);
+                    let alignment = aligner.semiglobal(x, r);
+                    print!("\tdepth: {}, score: {}\t", count, alignment.score);
+                    if alignment.score < x.len() as i32 {
+                        let mut i = 0;
+                        for op in &alignment.operations {
+                            match op {
+                                Match => (),
+                                _ => print!("{}:{:?},", i, op),
+                            }
+                            i += 1;
+                        }
+                    }
+                    println!("");
+                    if alignment.score < (x.len() as i32) - 6 {
+                        print!("{}", alignment.pretty(x, r));
                     }
                 }
             }
