@@ -12,6 +12,7 @@ use bio::io::fastq::{Reader, Record};
 
 use flate2::bufread::MultiGzDecoder;
 
+use std::cmp::min;
 use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::BufReader;
@@ -23,7 +24,7 @@ use serde::Deserialize;
 struct PrimerSet {
     name: String,
     primer: String,
-    length: u32,
+    length: usize,
     index: u32,
     reference: String,
 }
@@ -71,12 +72,22 @@ fn main() {
     let mut on_target: HashMap<String, u32> = HashMap::new();
     let mut full_match = HashMap::new();
 
-    let mut csv = csv::Reader::from_reader(File::open(args.value_of("primers").unwrap()).unwrap());
     let mut readbins = HashMap::new();
     let mut seqs = HashMap::new();
-    for result in csv.deserialize() {
+    let mut plen = 100;
+
+    for result in csv::Reader::from_reader(File::open(args.value_of("primers").unwrap()).unwrap())
+        .deserialize()
+    {
         let record: PrimerSet = result.unwrap();
-        let primer = String::from(&record.primer[..20]);
+        plen = min(record.length, plen);
+    }
+
+    for result in csv::Reader::from_reader(File::open(args.value_of("primers").unwrap()).unwrap())
+        .deserialize()
+    {
+        let record: PrimerSet = result.unwrap();
+        let primer = String::from(&record.primer[..plen]);
         let name = String::from(&record.name);
         primers.insert(primer, String::from(&record.name));
         readbins.insert(name, BTreeMap::new());
@@ -101,8 +112,8 @@ fn main() {
         match (record1, record2) {
             (Ok(r1), Ok(r2)) => {
                 total_pairs += 1;
-                let p1 = String::from_utf8(r1.seq()[..20].to_vec()).unwrap();
-                let p2 = String::from_utf8(r2.seq()[..20].to_vec()).unwrap();
+                let p1 = String::from_utf8(r1.seq()[..plen].to_vec()).unwrap();
+                let p2 = String::from_utf8(r2.seq()[..plen].to_vec()).unwrap();
                 match (primers.get(&p1), primers.get(&p2)) {
                     (Some(p1name), Some(p2name)) => {
                         if !(invert) & grep {
@@ -111,7 +122,7 @@ fn main() {
                         };
                         let len = r1.seq().len();
                         let limit = if len < 200 { len - 15 } else { 190 };
-                        let seq = String::from_utf8(r1.seq()[20..limit].to_vec()).unwrap();
+                        let seq = String::from_utf8(r1.seq()[plen..limit].to_vec()).unwrap();
                         *(readbins.get_mut(&String::from(p1name)).unwrap())
                             .entry(seq)
                             .or_insert(0) += 1;
@@ -165,7 +176,6 @@ fn main() {
         }
         let score = |a: u8, b: u8| if a == b { 1i32 } else { -1i32 };
         for (primer, reads) in readbins {
-            print!("{}\n", primer);
             for (read, count) in reads {
                 if count > 500 {
                     //                    println!("\t{}", seqs.get(&primer).unwrap());
@@ -173,7 +183,7 @@ fn main() {
                     let x = read.as_bytes();
                     let mut aligner = Aligner::with_capacity(x.len(), r.len(), -3, -1, &score);
                     let alignment = aligner.semiglobal(x, r);
-                    print!("\tdepth: {}, score: {}\t", count, alignment.score);
+                    print!("{}\tdepth:{}\tscore:{}\t", primer, count, alignment.score);
                     if alignment.score < x.len() as i32 {
                         let mut i = 0;
                         for op in &alignment.operations {
@@ -191,6 +201,6 @@ fn main() {
                 }
             }
         }
-        eprintln!("{}/{} read pairs matched.", matched, total_pairs);
     }
+    eprintln!("{}/{} read pairs matched.", matched, total_pairs);
 }
