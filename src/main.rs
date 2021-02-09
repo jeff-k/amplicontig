@@ -112,6 +112,9 @@ fn main() {
         match (record1, record2) {
             (Ok(r1), Ok(r2)) => {
                 total_pairs += 1;
+                if r1.seq().len() < plen || r2.seq().len() < plen {
+                    ()
+                }
                 let p1 = String::from_utf8(r1.seq()[..plen].to_vec()).unwrap();
                 let p2 = String::from_utf8(r2.seq()[..plen].to_vec()).unwrap();
                 match (primers.get(&p1), primers.get(&p2)) {
