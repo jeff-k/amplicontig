@@ -29,11 +29,11 @@ struct PrimerSet {
     reference: String,
 }
 
-fn printrec(r: &Record, pname: &str) {
+fn printrec(r: &Record, pname: &str, start: usize) {
     let desc = format!("{}:{}", pname, r.desc().unwrap());
     print!(
         "{}",
-        Record::with_attrs(r.id(), Some(&desc), r.seq(), r.qual())
+        Record::with_attrs(r.id(), Some(&desc), r.seq()[start..], r.qual()[start..])
     );
 }
 
@@ -117,8 +117,8 @@ fn main() {
                 match (primers.get(&p1), primers.get(&p2)) {
                     (Some(p1name), Some(p2name)) => {
                         if !(invert) & grep {
-                            printrec(&r1, p1name);
-                            printrec(&r2, p2name);
+                            printrec(&r1, p1name, plen);
+                            printrec(&r2, p2name, plen);
                         };
                         let len = r1.seq().len();
                         let limit = if len < 200 { len - 15 } else { 190 };
