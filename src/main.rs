@@ -111,54 +111,53 @@ fn main() {
     for (record1, record2) in fq1.zip(fq2) {
         match (record1, record2) {
             (Ok(r1), Ok(r2)) => {
-                total_pairs += 1;
-                if r1.seq().len() < plen || r2.seq().len() < plen {
-                    ()
-                }
-                let p1 = String::from_utf8(r1.seq()[..plen].to_vec()).unwrap();
-                let p2 = String::from_utf8(r2.seq()[..plen].to_vec()).unwrap();
-                match (primers.get(&p1), primers.get(&p2)) {
-                    (Some(p1name), Some(p2name)) => {
-                        if !(invert) & grep {
-                            printrec(&r1, p1name, plen);
-                            printrec(&r2, p2name, plen);
-                        };
-                        let len = r1.seq().len();
-                        let limit = if len < 200 { len - 15 } else { 190 };
-                        let seq = String::from_utf8(r1.seq()[plen..limit].to_vec()).unwrap();
-                        *(readbins.get_mut(&String::from(p1name)).unwrap())
-                            .entry(seq)
-                            .or_insert(0) += 1;
-                        *full_match
-                            .entry(format!("{}:{}", p1name, p2name))
-                            .or_insert(0) += 1;
-                        *on_target.entry(p1name.to_string()).or_insert(0) += 1;
-                        *on_target.entry(p2name.to_string()).or_insert(0) += 1;
-                        matched += 1
-                    }
-                    (Some(p1name), None) => {
-                        *off_target.entry(p2).or_insert(0) += 1;
-                        *on_target.entry(p1name.to_string()).or_insert(0) += 1;
-                        if invert & grep {
-                            printrec(&r1, p1name, plen);
-                            print!("{}", r2);
+                if r1.seq().len() > (plen + 20) && r2.seq().len() > (plen + 20) {
+                    total_pairs += 1;
+                    let p1 = String::from_utf8(r1.seq()[..plen].to_vec()).unwrap();
+                    let p2 = String::from_utf8(r2.seq()[..plen].to_vec()).unwrap();
+                    match (primers.get(&p1), primers.get(&p2)) {
+                        (Some(p1name), Some(p2name)) => {
+                            if !(invert) & grep {
+                                printrec(&r1, p1name, plen);
+                                printrec(&r2, p2name, plen);
+                            };
+                            let len = r1.seq().len();
+                            let limit = if len < 200 { len - 15 } else { 190 };
+                            let seq = String::from_utf8(r1.seq()[plen..limit].to_vec()).unwrap();
+                            *(readbins.get_mut(&String::from(p1name)).unwrap())
+                                .entry(seq)
+                                .or_insert(0) += 1;
+                            *full_match
+                                .entry(format!("{}:{}", p1name, p2name))
+                                .or_insert(0) += 1;
+                            *on_target.entry(p1name.to_string()).or_insert(0) += 1;
+                            *on_target.entry(p2name.to_string()).or_insert(0) += 1;
+                            matched += 1
                         }
-                    }
-                    (None, Some(p2name)) => {
-                        *off_target.entry(p1).or_insert(0) += 1;
-                        *on_target.entry(p2name.to_string()).or_insert(0) += 1;
-                        if invert & grep {
-                            print!("{}", r1);
-                            printrec(&r2, p2name, plen);
+                        (Some(p1name), None) => {
+                            *off_target.entry(p2).or_insert(0) += 1;
+                            *on_target.entry(p1name.to_string()).or_insert(0) += 1;
+                            if invert & grep {
+                                printrec(&r1, p1name, plen);
+                                print!("{}", r2);
+                            }
                         }
-                    }
-                    (None, None) => {
-                        *off_target.entry(p1).or_insert(0) += 1;
-                        *off_target.entry(p2).or_insert(0) += 1;
+                        (None, Some(p2name)) => {
+                            *off_target.entry(p1).or_insert(0) += 1;
+                            *on_target.entry(p2name.to_string()).or_insert(0) += 1;
+                            if invert & grep {
+                                print!("{}", r1);
+                                printrec(&r2, p2name, plen);
+                            }
+                        }
+                        (None, None) => {
+                            *off_target.entry(p1).or_insert(0) += 1;
+                            *off_target.entry(p2).or_insert(0) += 1;
 
-                        if invert & grep {
-                            print!("{}", r1);
-                            print!("{}", r2);
+                            if invert & grep {
+                                print!("{}", r1);
+                                print!("{}", r2);
+                            }
                         }
                     }
                 }
