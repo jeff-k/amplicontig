@@ -12,7 +12,7 @@ use bio::io::fastq::{Reader, Record};
 
 use flate2::bufread::MultiGzDecoder;
 
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::BufReader;
@@ -75,12 +75,14 @@ fn main() {
     let mut readbins = HashMap::new();
     let mut seqs = HashMap::new();
     let mut plen = 100;
+    let mut pmax = 0;
 
     for result in csv::Reader::from_reader(File::open(args.value_of("primers").unwrap()).unwrap())
         .deserialize()
     {
         let record: PrimerSet = result.unwrap();
         plen = min(record.length, plen);
+        pmax = max(record.length, pmax);
     }
 
     for result in csv::Reader::from_reader(File::open(args.value_of("primers").unwrap()).unwrap())
@@ -111,15 +113,15 @@ fn main() {
     for (record1, record2) in fq1.zip(fq2) {
         match (record1, record2) {
             (Ok(r1), Ok(r2)) => {
-                if r1.seq().len() > (plen + 20) && r2.seq().len() > (plen + 20) {
+                if r1.seq().len() > (plen + 80) && r2.seq().len() > (plen + 80) {
                     total_pairs += 1;
                     let p1 = String::from_utf8(r1.seq()[..plen].to_vec()).unwrap();
                     let p2 = String::from_utf8(r2.seq()[..plen].to_vec()).unwrap();
                     match (primers.get(&p1), primers.get(&p2)) {
                         (Some(p1name), Some(p2name)) => {
                             if !(invert) & grep {
-                                printrec(&r1, p1name, plen);
-                                printrec(&r2, p2name, plen);
+                                printrec(&r1, p1name, pmax);
+                                printrec(&r2, p2name, pmax);
                             };
                             let len = r1.seq().len();
                             let limit = if len < 200 { len - 15 } else { 190 };
