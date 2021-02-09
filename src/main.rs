@@ -33,7 +33,7 @@ fn printrec(r: &Record, pname: &str, start: usize) {
     let desc = format!("{}:{}", pname, r.desc().unwrap());
     print!(
         "{}",
-        Record::with_attrs(r.id(), Some(&desc), r.seq()[start..], r.qual()[start..])
+        Record::with_attrs(r.id(), Some(&desc), &r.seq()[start..], &r.qual()[start..])
     );
 }
 
@@ -140,7 +140,7 @@ fn main() {
                         *off_target.entry(p2).or_insert(0) += 1;
                         *on_target.entry(p1name.to_string()).or_insert(0) += 1;
                         if invert & grep {
-                            printrec(&r1, p1name);
+                            printrec(&r1, p1name, plen);
                             print!("{}", r2);
                         }
                     }
@@ -149,7 +149,7 @@ fn main() {
                         *on_target.entry(p2name.to_string()).or_insert(0) += 1;
                         if invert & grep {
                             print!("{}", r1);
-                            printrec(&r2, p2name);
+                            printrec(&r2, p2name, plen);
                         }
                     }
                     (None, None) => {
