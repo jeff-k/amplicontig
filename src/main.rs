@@ -24,6 +24,7 @@ use serde::Deserialize;
 struct PrimerSet {
     name: String,
     primer: String,
+    direction: bool,
     length: usize,
     index: u32,
     reference: String,
@@ -65,6 +66,12 @@ fn main() {
                 .takes_value(false)
                 .help("print stats about primer performance"),
         )
+        .arg(
+            Arg::with_name("trim")
+                .short("t")
+                .required(false)
+                .help("trim bases from 3' end"),
+        )
         .get_matches();
 
     let mut primers = HashMap::new();
@@ -76,6 +83,11 @@ fn main() {
     let mut seqs = HashMap::new();
     let mut plen = 100;
     let mut pmax = 0;
+
+    let trim: usize = match args.value_of("trim") {
+        Some(s) => s.parse::<usize>().unwrap_or(0),
+        None => 0,
+    };
 
     for result in csv::Reader::from_reader(File::open(args.value_of("primers").unwrap()).unwrap())
         .deserialize()
@@ -91,7 +103,10 @@ fn main() {
         let record: PrimerSet = result.unwrap();
         let primer = String::from(&record.primer[..plen]);
         let name = String::from(&record.name);
-        primers.insert(primer, String::from(&record.name));
+        primers.insert(
+            primer,
+            (String::from(&record.name), record.direction, record.length),
+        );
         readbins.insert(name, BTreeMap::new());
         seqs.insert(String::from(&record.name), String::from(&record.reference));
     }
@@ -118,17 +133,26 @@ fn main() {
                     let p1 = String::from_utf8(r1.seq()[..plen].to_vec()).unwrap();
                     let p2 = String::from_utf8(r2.seq()[..plen].to_vec()).unwrap();
                     match (primers.get(&p1), primers.get(&p2)) {
-                        (Some(p1name), Some(p2name)) => {
+                        (Some((p1name, _, p1len)), Some((p2name, _, p2len))) => {
                             if !(invert) & grep {
-                                printrec(&r1, p1name, pmax);
-                                printrec(&r2, p2name, pmax);
+                                printrec(&r1, p1name, *p1len);
+                                printrec(&r2, p2name, *p2len);
                             };
-                            let len = r1.seq().len();
-                            let limit = if len < 200 { len - 15 } else { 190 };
-                            let seq = String::from_utf8(r1.seq()[plen..limit].to_vec()).unwrap();
+
+                            let seq1 =
+                                String::from_utf8(r1.seq()[*p1len..r1.seq().len() - trim].to_vec())
+                                    .unwrap();
                             *(readbins.get_mut(&String::from(p1name)).unwrap())
-                                .entry(seq)
+                                .entry(seq1)
                                 .or_insert(0) += 1;
+
+                            let seq2 =
+                                String::from_utf8(r2.seq()[*p2len..r2.seq().len() - trim].to_vec())
+                                    .unwrap();
+                            *(readbins.get_mut(&String::from(p2name)).unwrap())
+                                .entry(seq2)
+                                .or_insert(0) += 1;
+
                             *full_match
                                 .entry(format!("{}:{}", p1name, p2name))
                                 .or_insert(0) += 1;
@@ -136,20 +160,20 @@ fn main() {
                             *on_target.entry(p2name.to_string()).or_insert(0) += 1;
                             matched += 1
                         }
-                        (Some(p1name), None) => {
+                        (Some((p1name, _, p1len)), None) => {
                             *off_target.entry(p2).or_insert(0) += 1;
                             *on_target.entry(p1name.to_string()).or_insert(0) += 1;
                             if invert & grep {
-                                printrec(&r1, p1name, plen);
+                                printrec(&r1, p1name, *p1len);
                                 print!("{}", r2);
                             }
                         }
-                        (None, Some(p2name)) => {
+                        (None, Some((p2name, _, p2len))) => {
                             *off_target.entry(p1).or_insert(0) += 1;
                             *on_target.entry(p2name.to_string()).or_insert(0) += 1;
                             if invert & grep {
                                 print!("{}", r1);
-                                printrec(&r2, p2name, plen);
+                                printrec(&r2, p2name, *p2len);
                             }
                         }
                         (None, None) => {
@@ -200,10 +224,9 @@ fn main() {
                         let mut i = 0;
                         for op in &alignment.operations {
                             match op {
-                                Match => (),
+                                Match => i += 1,
                                 _ => print!("{}:{:?};", i, op),
                             }
-                            i += 1;
                         }
                     }
                     print!("\t");

@@ -13,6 +13,7 @@ FLAGS:
     -h, --help       Prints help information
     -n               invert selection (show unmatching reads)
     -s               print stats about primer performance
+    -t               trim bases from 3' end
     -V, --version    Prints version information
 
 ARGS:
