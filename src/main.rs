@@ -28,14 +28,14 @@ use mating::{mate, mend_consensus, merge, truncate};
 struct PrimerSet {
     name: String,
     primer: String,
-    direction: bool,
+    forward: bool,
     length: usize,
     index: u32,
     reference: String,
 }
 
 fn printrec(r: &Record, pname: &str, start: usize, end: usize) {
-    let desc = format!("{}:{}", pname, r.desc().unwrap());
+    let desc = format!("{}", pname);
     print!(
         "{}",
         Record::with_attrs(
@@ -118,7 +118,6 @@ fn main() {
         Some(s) => s.parse::<usize>().unwrap_or(0),
         None => 0,
     };
-
     for result in csv::Reader::from_reader(File::open(args.value_of("primers").unwrap()).unwrap())
         .deserialize()
     {
@@ -135,7 +134,7 @@ fn main() {
         let name = String::from(&record.name);
         primers.insert(
             primer,
-            (String::from(&record.name), record.direction, record.length),
+            (String::from(&record.name), record.forward, record.length),
         );
         readbins.insert(name, BTreeMap::new());
         seqs.insert(String::from(&record.name), String::from(&record.reference));
@@ -162,21 +161,31 @@ fn main() {
             (Ok(r1), Ok(r2)) => {
                 if let Some(r) = merge_records(&r1, &r2) {
                     let rlen = r.seq().len();
+                    if rlen < 100 {
+                        continue;
+                    }
                     let p1 = String::from_utf8(r.seq()[..plen].to_vec()).unwrap();
-                    let p2 = String::from_utf8(r.seq()[(rlen - plen)..].to_vec()).unwrap();
+                    let p2 = String::from_utf8(r.seq()[..plen].to_vec()).unwrap();
 
                     total_mated += 1;
                     match (primers.get(&p1), primers.get(&p2)) {
                         (Some((p1name, is_forward, p1len)), Some((p2name, _, p2len))) => {
+                            //eprintln!("{} {} {} {}", p1name, *p1len, p2name, *p2len);
                             if !(invert) & grep {
-                                printrec(&r, p1name, *p1len, *p2len);
+                                printrec(
+                                    &r,
+                                    &(format!("{}:{}", p1name, p2name)),
+                                    *p1len,
+                                    rlen - *p2len,
+                                );
                             };
 
                             let seq = if *is_forward {
-                                String::from_utf8(r.seq()[*p1len..*p2len].to_vec()).unwrap()
+                                String::from_utf8(r.seq()[*p1len..(rlen - *p2len)].to_vec())
+                                    .unwrap()
                             } else {
                                 String::from_utf8(dna::revcomp(
-                                    r.seq()[(*p1len)..(*p2len)].to_vec(),
+                                    r.seq()[(*p1len)..(rlen - *p2len)].to_vec(),
                                 ))
                                 .unwrap()
                             };
@@ -231,23 +240,24 @@ fn main() {
                     //                    println!("\t{}", seqs.get(&primer).unwrap());
                     let r = seqs.get(&primer).unwrap().as_bytes();
                     let x = read.as_bytes();
-                    let mut aligner = Aligner::with_capacity(x.len(), r.len(), -3, -1, &score);
-                    let alignment = aligner.semiglobal(x, r);
-                    print!(
-                        "\tallele:{},depth:{},score:{},",
-                        vars, count, alignment.score
-                    );
+                    //                    let mut aligner = Aligner::with_capacity(x.len(), r.len(), -3, -1, &score);
+                    //                    let alignment = aligner.semiglobal(x, r);
+                    //                    print!(
+                    //                        "\tallele:{},depth:{},score:{},",
+                    //                        vars, count, alignment.score
+                    print!("{}", read);
+                    // );
                     vars += 1;
 
-                    if alignment.score < x.len() as i32 {
-                        let mut i = 0;
-                        for op in &alignment.operations {
-                            match op {
-                                Match => i += 1,
-                                _ => print!("{}:{:?};", i, op),
-                            }
-                        }
-                    }
+                    //                    if alignment.score < x.len() as i32 {
+                    //                        let mut i = 0;
+                    //                        for op in &alignment.operations {
+                    //                            match op {
+                    //                                Match => i += 1,
+                    //                                _ => print!("{}:{:?};", i, op),
+                    //                            }
+                    //                        }
+                    //                    }
                     print!("\t");
                     //if alignment.score < (x.len() as i32) - 6 {
                     //    print!("{}", alignment.pretty(x, r));
@@ -257,9 +267,10 @@ fn main() {
         }
     }
     eprintln!(
-        "{}\t{}/{}\tread pairs matched.",
+        "{}\t{}/{}\t({}) read pairs matched.",
         args.value_of("R1").unwrap(),
         matched,
+        total_mated,
         total_pairs
     );
 }
