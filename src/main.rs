@@ -8,6 +8,7 @@ use clap::{App, Arg};
 
 use bio::alignment::pairwise::*;
 use bio::alignment::AlignmentOperation::Match;
+use bio::alphabets::dna;
 use bio::io::fastq::{Reader, Record};
 
 use flate2::bufread::MultiGzDecoder;
@@ -20,6 +21,9 @@ use std::str;
 
 use serde::Deserialize;
 
+mod mating;
+use mating::{mate, mend_consensus, merge, truncate};
+
 #[derive(Debug, Deserialize)]
 struct PrimerSet {
     name: String,
@@ -30,12 +34,38 @@ struct PrimerSet {
     reference: String,
 }
 
-fn printrec(r: &Record, pname: &str, start: usize) {
+fn printrec(r: &Record, pname: &str, start: usize, end: usize) {
     let desc = format!("{}:{}", pname, r.desc().unwrap());
     print!(
         "{}",
-        Record::with_attrs(r.id(), Some(&desc), &r.seq()[start..], &r.qual()[start..])
+        Record::with_attrs(
+            r.id(),
+            Some(&desc),
+            &r.seq()[start..end],
+            &r.qual()[start..end]
+        )
     );
+}
+
+fn merge_records(r1: &Record, r2: &Record) -> Option<Record> {
+    let r2_rc = dna::revcomp(r2.seq());
+    let r1_rc = dna::revcomp(r1.seq());
+
+    match mate(&r1.seq(), &r2_rc, 25, 20) {
+        Some(overlap) => {
+            let seq = merge(&r1.seq(), &r2_rc, overlap, mend_consensus);
+            let qual = merge(&r1.qual(), &r2.qual(), overlap, max);
+            Some(Record::with_attrs(r1.id(), None, &seq, &qual))
+        }
+        None => match mate(&r1_rc, &r2.seq(), 25, 20) {
+            Some(overlap) => {
+                let seq = truncate(&r1.seq(), &r2_rc, overlap, mend_consensus);
+                let qual = truncate(&r1.qual(), &r2.qual(), overlap, max);
+                Some(Record::with_attrs(r1.id(), None, &seq, &qual))
+            }
+            None => None,
+        },
+    }
 }
 
 fn main() {
@@ -121,36 +151,38 @@ fn main() {
     .records();
 
     let mut total_pairs = 0;
+    let mut total_mated = 0;
     let mut matched = 0;
     let grep = !(args.is_present("stats"));
     let invert = args.is_present("invert");
 
     for (record1, record2) in fq1.zip(fq2) {
+        total_pairs += 1;
         match (record1, record2) {
             (Ok(r1), Ok(r2)) => {
-                if r1.seq().len() > (plen + 80) && r2.seq().len() > (plen + 80) {
-                    total_pairs += 1;
-                    let p1 = String::from_utf8(r1.seq()[..plen].to_vec()).unwrap();
-                    let p2 = String::from_utf8(r2.seq()[..plen].to_vec()).unwrap();
+                if let Some(r) = merge_records(&r1, &r2) {
+                    let rlen = r.seq().len();
+                    let p1 = String::from_utf8(r.seq()[..plen].to_vec()).unwrap();
+                    let p2 = String::from_utf8(r.seq()[(rlen - plen)..].to_vec()).unwrap();
+
+                    total_mated += 1;
                     match (primers.get(&p1), primers.get(&p2)) {
-                        (Some((p1name, _, p1len)), Some((p2name, _, p2len))) => {
+                        (Some((p1name, is_forward, p1len)), Some((p2name, _, p2len))) => {
                             if !(invert) & grep {
-                                printrec(&r1, p1name, *p1len);
-                                printrec(&r2, p2name, *p2len);
+                                printrec(&r, p1name, *p1len, *p2len);
                             };
 
-                            let seq1 =
-                                String::from_utf8(r1.seq()[*p1len..r1.seq().len() - trim].to_vec())
-                                    .unwrap();
-                            *(readbins.get_mut(&String::from(p1name)).unwrap())
-                                .entry(seq1)
-                                .or_insert(0) += 1;
+                            let seq = if *is_forward {
+                                String::from_utf8(r.seq()[*p1len..*p2len].to_vec()).unwrap()
+                            } else {
+                                String::from_utf8(dna::revcomp(
+                                    r.seq()[(*p1len)..(*p2len)].to_vec(),
+                                ))
+                                .unwrap()
+                            };
 
-                            let seq2 =
-                                String::from_utf8(r2.seq()[*p2len..r2.seq().len() - trim].to_vec())
-                                    .unwrap();
-                            *(readbins.get_mut(&String::from(p2name)).unwrap())
-                                .entry(seq2)
+                            *(readbins.get_mut(&String::from(p1name)).unwrap())
+                                .entry(seq)
                                 .or_insert(0) += 1;
 
                             *full_match
@@ -163,27 +195,14 @@ fn main() {
                         (Some((p1name, _, p1len)), None) => {
                             *off_target.entry(p2).or_insert(0) += 1;
                             *on_target.entry(p1name.to_string()).or_insert(0) += 1;
-                            if invert & grep {
-                                printrec(&r1, p1name, *p1len);
-                                print!("{}", r2);
-                            }
                         }
                         (None, Some((p2name, _, p2len))) => {
                             *off_target.entry(p1).or_insert(0) += 1;
                             *on_target.entry(p2name.to_string()).or_insert(0) += 1;
-                            if invert & grep {
-                                print!("{}", r1);
-                                printrec(&r2, p2name, *p2len);
-                            }
                         }
                         (None, None) => {
                             *off_target.entry(p1).or_insert(0) += 1;
                             *off_target.entry(p2).or_insert(0) += 1;
-
-                            if invert & grep {
-                                print!("{}", r1);
-                                print!("{}", r2);
-                            }
                         }
                     }
                 }
