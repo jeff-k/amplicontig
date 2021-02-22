@@ -3,18 +3,20 @@ Extract Illumina read pairs that exactly match primer sequences
 
 ### Synopsis
 ```
-extract-amplicons --help
-extract-amplicons 0.1.0
+extract-amplicons 0.1.1
 
 USAGE:
-    extract-amplicons [FLAGS] [ARGS]
+    extract-amplicons [FLAGS] [OPTIONS] [ARGS]
 
 FLAGS:
+    -x               excise primer sequence from reads
     -h, --help       Prints help information
     -n               invert selection (show unmatching reads)
     -s               print stats about primer performance
-    -t               trim bases from 3' end
     -V, --version    Prints version information
+
+OPTIONS:
+    -t <trim>        trim bases from 3' end
 
 ARGS:
     <primers>    csv file for primer set
@@ -25,7 +27,7 @@ ARGS:
 ### Building
 
 ```
-$ cargo build --release
+cargo build --release
 ```
 
 ### Examples
