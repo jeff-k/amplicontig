@@ -225,45 +225,46 @@ fn main() {
         //        println!("{}\t{}", primer, count);
         //     }
         //  }
-        // for (primer, count) in off_target {
-        //     if count > 1000 {
-        //        println!("{}\t{}", primer, count);
+        //for (primer, count) in off_target {
+        //    if count > 1000 {
+        //       println!("{}\t{}", primer, count);
         //     }
         // }
         let score = |a: u8, b: u8| if a == b { 1i32 } else { -1i32 };
 
         for (primer, reads) in readbins {
-            print!("\n{}\t{}\t", args.value_of("R1").unwrap(), primer);
+            print!(
+                "{}\t{}\t{}",
+                args.value_of("R1").unwrap(),
+                primer,
+                match on_target.get(&primer) {
+                    Some(n) => *n,
+                    None => 0,
+                }
+            );
             let mut vars = 1;
             for (read, count) in reads {
-                if count > 500 {
-                    //                    println!("\t{}", seqs.get(&primer).unwrap());
+                if count > 400 {
                     let r = seqs.get(&primer).unwrap().as_bytes();
                     let x = read.as_bytes();
-                    //                    let mut aligner = Aligner::with_capacity(x.len(), r.len(), -3, -1, &score);
-                    //                    let alignment = aligner.semiglobal(x, r);
-                    //                    print!(
-                    //                        "\tallele:{},depth:{},score:{},",
-                    //                        vars, count, alignment.score
-                    print!("{}", read);
-                    // );
+                    let mut aligner = Aligner::with_capacity(x.len(), r.len(), -3, -1, &score);
+                    let alignment = aligner.semiglobal(x, r);
+                    //print!(
+                    //    "{}:allele:{},depth:{},score:{},cigar:{}",
+                    //    seqs.get(&primer).unwrap(), vars, count, alignment.score, alignment.cigar(false)
+                    //);
+                    print!(
+                        "\tallele:{},depth:{},length:{},score:{},cigar:{}",
+                        vars,
+                        count,
+                        r.len(),
+                        alignment.score,
+                        alignment.cigar(false)
+                    );
                     vars += 1;
-
-                    //                    if alignment.score < x.len() as i32 {
-                    //                        let mut i = 0;
-                    //                        for op in &alignment.operations {
-                    //                            match op {
-                    //                                Match => i += 1,
-                    //                                _ => print!("{}:{:?};", i, op),
-                    //                            }
-                    //                        }
-                    //                    }
-                    print!("\t");
-                    //if alignment.score < (x.len() as i32) - 6 {
-                    //    print!("{}", alignment.pretty(x, r));
-                    // }
                 }
             }
+            println!("");
         }
     }
     eprintln!(
