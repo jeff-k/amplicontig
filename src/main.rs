@@ -44,7 +44,7 @@ fn printrec(r: &Record, pname: &str, start: usize, end: usize) {
 }
 
 fn main() {
-    let args = App::new("extract-amplicons")
+    let args = App::new("amplicontig")
         .version("0.1.0")
         .arg(
             Arg::with_name("primers")
