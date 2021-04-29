@@ -8,6 +8,7 @@ use clap::{App, Arg};
 
 use bio::alignment::pairwise::*;
 use bio::alignment::AlignmentOperation::Match;
+use bio::alphabets::dna;
 use bio::io::fastq::{Reader, Record};
 
 use flate2::bufread::MultiGzDecoder;
