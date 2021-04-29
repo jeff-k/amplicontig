@@ -17,6 +17,7 @@ use std::cmp::{max, min};
 use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::BufReader;
+use std::process::exit;
 use std::str;
 
 use serde::Deserialize;
@@ -29,9 +30,12 @@ struct PrimerSet {
     name: String,
     primer: String,
     forward: bool,
-    length: usize,
     index: u32,
-    reference: String,
+}
+
+struct MatchedReads {
+    zipfq: (),
+    next: (Record, Option<PrimerSet>, Record, Option<PrimerSet>),
 }
 
 fn printrec(r: &Record, pname: &str, start: usize, end: usize) {
@@ -70,7 +74,7 @@ fn merge_records(r1: &Record, r2: &Record) -> Option<Record> {
 
 fn main() {
     let args = App::new("amplicontig")
-        .version("0.1.0")
+        .version("0.1.2")
         .arg(
             Arg::with_name("primers")
                 .index(1)
@@ -106,6 +110,7 @@ fn main() {
         .arg(
             Arg::with_name("test")
                 .required(false)
+                .short("z")
                 .takes_value(false)
                 .help("test whether fastq(s) match primer set"),
         )
@@ -124,7 +129,6 @@ fn main() {
     let mut full_match = HashMap::new();
 
     let mut readbins = HashMap::new();
-    let mut seqs = HashMap::new();
     let mut plen = 100;
     let mut pmax = 0;
 
@@ -133,26 +137,29 @@ fn main() {
         None => 0,
     };
 
+    let mut primer_recs = Vec::new();
     for result in csv::Reader::from_reader(File::open(args.value_of("primers").unwrap()).unwrap())
         .deserialize()
     {
         let record: PrimerSet = result.unwrap();
-        plen = min(record.length, plen);
-        pmax = max(record.length, pmax);
+        let l = record.primer.len();
+        plen = min(l, plen);
+        pmax = max(l, pmax);
+        primer_recs.push(record);
     }
 
-    for result in csv::Reader::from_reader(File::open(args.value_of("primers").unwrap()).unwrap())
-        .deserialize()
-    {
-        let record: PrimerSet = result.unwrap();
+    for record in primer_recs {
         let primer = String::from(&record.primer[..plen]);
         let name = String::from(&record.name);
         primers.insert(
             primer,
-            (String::from(&record.name), record.forward, record.length),
+            (
+                String::from(&record.name),
+                record.forward,
+                record.primer.len(),
+            ),
         );
         readbins.insert(name, BTreeMap::new());
-        seqs.insert(String::from(&record.name), String::from(&record.reference));
     }
 
     let fq1 = Reader::new(MultiGzDecoder::new(BufReader::new(
@@ -167,6 +174,7 @@ fn main() {
     let mut total_pairs = 0;
     let mut total_mated = 0;
     let mut matched = 0;
+    let test_pset = args.is_present("test");
     let grep = !(args.is_present("stats"));
     let invert = args.is_present("invert");
     let excise = args.is_present("ex");
@@ -186,6 +194,7 @@ fn main() {
                     total_mated += 1;
                     match (primers.get(&p1), primers.get(&p2)) {
                         (Some((p1name, is_forward, p1len)), Some((p2name, _, p2len))) => {
+                            matched += 2;
                             //eprintln!("{} {} {} {}", p1name, *p1len, p2name, *p2len);
                             if !(invert) & grep {
                                 printrec(
@@ -215,11 +224,11 @@ fn main() {
                                 .or_insert(0) += 1;
                             *on_target.entry(p1name.to_string()).or_insert(0) += 1;
                             *on_target.entry(p2name.to_string()).or_insert(0) += 1;
-                            matched += 1
                         }
                         (Some((p1name, _, p1len)), None) => {
                             *off_target.entry(p2).or_insert(0) += 1;
                             *on_target.entry(p1name.to_string()).or_insert(0) += 1;
+                            matched += 1;
                             if invert & grep {
                                 //printrec(&r1, p1name, *p1len);
                                 print!("{}", r2);
@@ -228,6 +237,7 @@ fn main() {
                         (None, Some((p2name, _, p2len))) => {
                             *off_target.entry(p1).or_insert(0) += 1;
                             *on_target.entry(p2name.to_string()).or_insert(0) += 1;
+                            matched += 1;
                             if invert & grep {
                                 print!("{}", r1);
                                 //printrec(&r2, p2name, *p2len);
@@ -240,8 +250,15 @@ fn main() {
                     }
                 }
             }
-            _ => eprintln!("Not proper fastq file pair"),
+            _ => {
+                eprintln!("Not proper fastq file pair");
+                exit(1);
+            }
         }
+    }
+    if test_pset {
+        println!("{:?},{:?}", matched, total_pairs);
+        exit(0);
     }
     if !grep {
         //  for (primer, count) in on_target {
@@ -266,29 +283,6 @@ fn main() {
                     None => 0,
                 }
             );
-            let mut vars = 1;
-            for (read, count) in reads {
-                if count > 400 {
-                    let r = seqs.get(&primer).unwrap().as_bytes();
-                    let x = read.as_bytes();
-                    let mut aligner = Aligner::with_capacity(x.len(), r.len(), -3, -1, &score);
-                    let alignment = aligner.semiglobal(x, r);
-                    //print!(
-                    //    "{}:allele:{},depth:{},score:{},cigar:{}",
-                    //    seqs.get(&primer).unwrap(), vars, count, alignment.score, alignment.cigar(false)
-                    //);
-                    print!(
-                        "\tallele:{},depth:{},length:{},score:{},cigar:{}",
-                        vars,
-                        count,
-                        r.len(),
-                        alignment.score,
-                        alignment.cigar(false)
-                    );
-                    vars += 1;
-                }
-            }
-            println!("");
         }
     }
     eprintln!(
