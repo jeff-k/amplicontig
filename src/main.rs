@@ -79,6 +79,12 @@ fn main() {
                 .help("trim bases from 3' end"),
         )
         .arg(
+            Arg::with_name("test")
+                .required(false)
+                .takes_value(false)
+                .help("test whether fastq(s) match primer set"),
+        )
+        .arg(
             Arg::with_name("ex")
                 .short("x")
                 .required(false)
