@@ -6,26 +6,23 @@ extern crate serde;
 
 use clap::{App, Arg};
 
-use bio::alignment::pairwise::*;
-use bio::alignment::AlignmentOperation::Match;
 use bio::alphabets::dna;
-use bio::io::fastq::{Reader, Record};
+use bio::io::fastq::{Error, Reader, Record};
 
 use flate2::bufread::MultiGzDecoder;
 
+use serde::Deserialize;
 use std::cmp::{max, min};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::process::exit;
 use std::str;
 
-use serde::Deserialize;
-
 mod mating;
 use mating::{mate, mend_consensus, merge, truncate};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 struct PrimerSet {
     name: String,
     primer: String,
@@ -34,8 +31,56 @@ struct PrimerSet {
 }
 
 struct MatchedReads {
-    zipfq: (),
-    next: (Record, Option<PrimerSet>, Record, Option<PrimerSet>),
+    zipfq: Box<dyn Iterator<Item = (Result<Record, Error>, Result<Record, Error>)>>,
+    primers: HashMap<String, PrimerSet>,
+}
+
+impl Iterator for MatchedReads {
+    type Item = (Record, Option<PrimerSet>, Record, Option<PrimerSet>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.zipfq.next() {
+            Some((rec1, rec2)) => match (rec1, rec2) {
+                (Ok(r1), Ok(r2)) => {
+                    let plen = 22;
+                    let p1 = String::from_utf8(r1.seq()[..plen].to_vec()).unwrap();
+                    let p2 = String::from_utf8(r2.seq()[..plen].to_vec()).unwrap();
+
+                    let m1 = self.primers.get(&p1);
+                    let m2 = self.primers.get(&p2);
+                    Some((
+                        r1,
+                        match m1 {
+                            None => None,
+                            Some(p) => Some(p.clone()),
+                        },
+                        r2,
+                        match m2 {
+                            None => None,
+                            Some(p) => Some(p.clone()),
+                        },
+                    ))
+                }
+                _ => {
+                    eprintln!("Mismatched fastqs files (different lengths)");
+                    exit(1);
+                }
+            },
+            None => None,
+        }
+    }
+}
+
+impl MatchedReads {
+    fn new(
+        zipfq: Box<dyn Iterator<Item = (Result<Record, Error>, Result<Record, Error>)>>,
+        primers: HashMap<String, PrimerSet>,
+    ) -> MatchedReads {
+        MatchedReads {
+            zipfq: zipfq,
+            primers: primers,
+        }
+    }
 }
 
 fn printrec(r: &Record, pname: &str, start: usize, end: usize) {
@@ -123,12 +168,11 @@ fn main() {
         )
         .get_matches();
 
-    let mut primers = HashMap::new();
+    let mut primers: HashMap<String, PrimerSet> = HashMap::new();
     let mut off_target: HashMap<String, u32> = HashMap::new();
     let mut on_target: HashMap<String, u32> = HashMap::new();
-    let mut full_match = HashMap::new();
 
-    let mut readbins = HashMap::new();
+    //    let mut readbins = HashMap::new();
     let mut plen = 100;
     let mut pmax = 0;
 
@@ -148,18 +192,14 @@ fn main() {
         primer_recs.push(record);
     }
 
+    println!("{:?}", plen);
+
     for record in primer_recs {
         let primer = String::from(&record.primer[..plen]);
         let name = String::from(&record.name);
-        primers.insert(
-            primer,
-            (
-                String::from(&record.name),
-                record.forward,
-                record.primer.len(),
-            ),
-        );
-        readbins.insert(name, BTreeMap::new());
+        primers.insert(primer, record);
+        //        readbins.insert(name, BTreeMap::new());
+        //        primers.insert(String::from(dna::revcomp(primer)), record);
     }
 
     let fq1 = Reader::new(MultiGzDecoder::new(BufReader::new(
@@ -179,117 +219,129 @@ fn main() {
     let invert = args.is_present("invert");
     let excise = args.is_present("ex");
 
-    for (record1, record2) in fq1.zip(fq2) {
-        total_pairs += 1;
-        match (record1, record2) {
-            (Ok(r1), Ok(r2)) => {
-                if let Some(r) = merge_records(&r1, &r2) {
-                    let rlen = r.seq().len();
-                    if rlen < 100 {
-                        continue;
-                    }
-                    let p1 = String::from_utf8(r.seq()[..plen].to_vec()).unwrap();
-                    let p2 = String::from_utf8(r.seq()[..plen].to_vec()).unwrap();
+    //    for a,b,c,d in MatchedReads::new(fq1, fq2, primers) {
 
-                    total_mated += 1;
-                    match (primers.get(&p1), primers.get(&p2)) {
-                        (Some((p1name, is_forward, p1len)), Some((p2name, _, p2len))) => {
-                            matched += 2;
-                            //eprintln!("{} {} {} {}", p1name, *p1len, p2name, *p2len);
-                            if !(invert) & grep {
-                                printrec(
-                                    &r,
-                                    &(format!("{}:{}", p1name, p2name)),
-                                    *p1len,
-                                    rlen - *p2len,
-                                );
-                            };
-
-                            let seq = if *is_forward {
-                                String::from_utf8(r.seq()[*p1len..(rlen - *p2len)].to_vec())
-                                    .unwrap()
-                            } else {
-                                String::from_utf8(dna::revcomp(
-                                    r.seq()[(*p1len)..(rlen - *p2len)].to_vec(),
-                                ))
-                                .unwrap()
-                            };
-
-                            *(readbins.get_mut(&String::from(p1name)).unwrap())
-                                .entry(seq)
-                                .or_insert(0) += 1;
-
-                            *full_match
-                                .entry(format!("{}:{}", p1name, p2name))
-                                .or_insert(0) += 1;
-                            *on_target.entry(p1name.to_string()).or_insert(0) += 1;
-                            *on_target.entry(p2name.to_string()).or_insert(0) += 1;
-                        }
-                        (Some((p1name, _, p1len)), None) => {
-                            *off_target.entry(p2).or_insert(0) += 1;
-                            *on_target.entry(p1name.to_string()).or_insert(0) += 1;
-                            matched += 1;
-                            if invert & grep {
-                                //printrec(&r1, p1name, *p1len);
-                                print!("{}", r2);
-                            }
-                        }
-                        (None, Some((p2name, _, p2len))) => {
-                            *off_target.entry(p1).or_insert(0) += 1;
-                            *on_target.entry(p2name.to_string()).or_insert(0) += 1;
-                            matched += 1;
-                            if invert & grep {
-                                print!("{}", r1);
-                                //printrec(&r2, p2name, *p2len);
-                            }
-                        }
-                        (None, None) => {
-                            *off_target.entry(p1).or_insert(0) += 1;
-                            *off_target.entry(p2).or_insert(0) += 1;
-                        }
-                    }
-                }
-            }
-            _ => {
-                eprintln!("Not proper fastq file pair");
-                exit(1);
-            }
+    for (a, b, c, d) in MatchedReads::new(Box::new(fq1.zip(fq2)), primers) {
+        match (b, d) {
+            (Some(_), Some(_)) => matched += 2,
+            (Some(_), _) => matched += 1,
+            (_, Some(_)) => matched += 1,
+            _ => (),
         }
-    }
-    if test_pset {
-        println!("{:?},{:?}", matched, total_pairs);
-        exit(0);
-    }
-    if !grep {
-        //  for (primer, count) in on_target {
-        //     if count > 1000 {
-        //        println!("{}\t{}", primer, count);
-        //     }
-        //  }
-        // for (primer, count) in off_target {
-        //     if count > 1000 {
-        //        println!("{}\t{}", primer, count);
-        //     }
-        // }
-        let score = |a: u8, b: u8| if a == b { 1i32 } else { -1i32 };
+        total_mated += 1;
 
-        for (primer, reads) in readbins {
-            print!(
-                "{}\t{}\t{}",
-                args.value_of("R1").unwrap(),
-                primer,
-                match on_target.get(&primer) {
-                    Some(n) => *n,
-                    None => 0,
-                }
-            );
-        }
+        println!("{:?}/{:?}", matched, total_mated);
     }
-    eprintln!(
-        "{}\t{}/{}\t({}) read pairs matched.",
-        args.value_of("R1").unwrap(),
-        matched,
-        total_mated,
-        total_pairs
-    );
+
+    //        total_pairs += 1;
+    //        match (record1, record2) {
+    //            (Ok(r1), Ok(r2)) => {
+    //                if let Some(r) = merge_records(&r1, &r2) {
+    //                    let rlen = r.seq().len();
+    //                    if rlen < 100 {
+    //                        continue;
+    //                    }
+    //                    let p1 = String::from_utf8(r.seq()[..plen].to_vec()).unwrap();
+    //                    let p2 = String::from_utf8(r.seq()[..plen].to_vec()).unwrap();
+    //
+    //                    total_mated += 1;
+    //                    match (primers.get(&p1), primers.get(&p2)) {
+    //                        (Some((p1name, is_forward, p1len)), Some((p2name, _, p2len))) => {
+    //                            matched += 2;
+    //                            //eprintln!("{} {} {} {}", p1name, *p1len, p2name, *p2len);
+    //                            if !(invert) & grep {
+    //                                printrec(
+    //                                    &r,
+    //                                    &(format!("{}:{}", p1name, p2name)),
+    //                                    *p1len,
+    //                                    rlen - *p2len,
+    //                                );
+    //                            };
+    //
+    //                            let seq = if *is_forward {
+    //                                String::from_utf8(r.seq()[*p1len..(rlen - *p2len)].to_vec())
+    //                                    .unwrap()
+    //                            } else {
+    //                                String::from_utf8(dna::revcomp(
+    //                                    r.seq()[(*p1len)..(rlen - *p2len)].to_vec(),
+    //                                ))
+    //                                .unwrap()
+    //                            };
+    //
+    //                            *(readbins.get_mut(&String::from(p1name)).unwrap())
+    //                                .entry(seq)
+    //                                .or_insert(0) += 1;
+    //
+    //                            *full_match
+    //                                .entry(format!("{}:{}", p1name, p2name))
+    //                                .or_insert(0) += 1;
+    //                            *on_target.entry(p1name.to_string()).or_insert(0) += 1;
+    //                            *on_target.entry(p2name.to_string()).or_insert(0) += 1;
+    //                        }
+    //                        (Some((p1name, _, p1len)), None) => {
+    //                            *off_target.entry(p2).or_insert(0) += 1;
+    //                            *on_target.entry(p1name.to_string()).or_insert(0) += 1;
+    //                            matched += 1;
+    //                            if invert & grep {
+    //                                //printrec(&r1, p1name, *p1len);
+    //                                print!("{}", r2);
+    //                            }
+    //                        }
+    //                        (None, Some((p2name, _, p2len))) => {
+    //                            *off_target.entry(p1).or_insert(0) += 1;
+    //                            *on_target.entry(p2name.to_string()).or_insert(0) += 1;
+    //                            matched += 1;
+    //                            if invert & grep {
+    //                                print!("{}", r1);
+    //                                //printrec(&r2, p2name, *p2len);
+    //                            }
+    //                        }
+    //                        (None, None) => {
+    //                            *off_target.entry(p1).or_insert(0) += 1;
+    //                            *off_target.entry(p2).or_insert(0) += 1;
+    //                        }
+    //                    }
+    //                }
+    //            }
+    //            _ => {
+    //                eprintln!("Not proper fastq file pair");
+    //                exit(1);
+    //            }
+    //        }
+    //    }
+    //    if test_pset {
+    //        println!("{:?},{:?}", matched, total_pairs);
+    //        exit(0);
+    //    }
+    //    if !grep {
+    //        //  for (primer, count) in on_target {
+    //        //     if count > 1000 {
+    //        //        println!("{}\t{}", primer, count);
+    //        //     }
+    //        //  }
+    //        // for (primer, count) in off_target {
+    //        //     if count > 1000 {
+    //        //        println!("{}\t{}", primer, count);
+    //        //     }
+    //        // }
+    //
+    //        for (primer, reads) in readbins {
+    //            print!(
+    //                "{}\t{}\t{}",
+    //                args.value_of("R1").unwrap(),
+    //                primer,
+    //                match on_target.get(&primer) {
+    //                    Some(n) => *n,
+    //                    None => 0,
+    //                }
+    //            );
+    //        }
+    //    }
+    //    eprintln!(
+    //        "{}\t{}/{}\t({}) read pairs matched.",
+    //        args.value_of("R1").unwrap(),
+    //        matched,
+    //        total_mated,
+    //        total_pairs
+    //    );
 }
