@@ -30,13 +30,13 @@ struct PrimerSet {
     index: u32,
 }
 
-struct MatchedReads {
+struct MatchedReads<'a> {
     zipfq: Box<dyn Iterator<Item = (Result<Record, Error>, Result<Record, Error>)>>,
-    primers: HashMap<String, PrimerSet>,
+    primers: &'a HashMap<String, PrimerSet>,
 }
 
-impl Iterator for MatchedReads {
-    type Item = (Record, Option<PrimerSet>, Record, Option<PrimerSet>);
+impl<'a> Iterator for MatchedReads<'a> {
+    type Item = (Record, Option<&'a PrimerSet>, Record, Option<&'a PrimerSet>);
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.zipfq.next() {
@@ -46,20 +46,7 @@ impl Iterator for MatchedReads {
                     let p1 = String::from_utf8(r1.seq()[..plen].to_vec()).unwrap();
                     let p2 = String::from_utf8(r2.seq()[..plen].to_vec()).unwrap();
 
-                    let m1 = self.primers.get(&p1);
-                    let m2 = self.primers.get(&p2);
-                    Some((
-                        r1,
-                        match m1 {
-                            None => None,
-                            Some(p) => Some(p.clone()),
-                        },
-                        r2,
-                        match m2 {
-                            None => None,
-                            Some(p) => Some(p.clone()),
-                        },
-                    ))
+                    Some((r1, self.primers.get(&p1), r2, self.primers.get(&p2)))
                 }
                 _ => {
                     eprintln!("Mismatched fastqs files (different lengths)");
@@ -71,10 +58,10 @@ impl Iterator for MatchedReads {
     }
 }
 
-impl MatchedReads {
+impl<'a> MatchedReads<'a> {
     fn new(
         zipfq: Box<dyn Iterator<Item = (Result<Record, Error>, Result<Record, Error>)>>,
-        primers: HashMap<String, PrimerSet>,
+        primers: &HashMap<String, PrimerSet>,
     ) -> MatchedReads {
         MatchedReads {
             zipfq: zipfq,
@@ -221,7 +208,7 @@ fn main() {
 
     //    for a,b,c,d in MatchedReads::new(fq1, fq2, primers) {
 
-    for (a, b, c, d) in MatchedReads::new(Box::new(fq1.zip(fq2)), primers) {
+    for (a, b, c, d) in MatchedReads::new(Box::new(fq1.zip(fq2)), &primers) {
         match (b, d) {
             (Some(_), Some(_)) => matched += 2,
             (Some(_), _) => matched += 1,
