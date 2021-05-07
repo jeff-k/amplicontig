@@ -179,8 +179,6 @@ fn main() {
         primer_recs.push(record);
     }
 
-    println!("{:?}", plen);
-
     for record in primer_recs {
         let primer = String::from(&record.primer[..plen]);
         let name = String::from(&record.name);
@@ -206,20 +204,17 @@ fn main() {
     let invert = args.is_present("invert");
     let excise = args.is_present("ex");
 
-    //    for a,b,c,d in MatchedReads::new(fq1, fq2, primers) {
-
     for (a, b, c, d) in MatchedReads::new(Box::new(fq1.zip(fq2)), &primers) {
         match (b, d) {
             (Some(_), Some(_)) => matched += 2,
-            (Some(_), _) => matched += 1,
-            (_, Some(_)) => matched += 1,
+            (Some(_), None) => matched += 1,
+            (None, Some(_)) => matched += 1,
             _ => (),
         }
-        total_mated += 1;
-
-        println!("{:?}/{:?}", matched, total_mated);
+        total_mated += 2;
     }
 
+    println!("{:?}", matched as f64 / total_mated as f64);
     //        total_pairs += 1;
     //        match (record1, record2) {
     //            (Ok(r1), Ok(r2)) => {
