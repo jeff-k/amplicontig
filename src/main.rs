@@ -2,6 +2,7 @@ extern crate bio;
 extern crate clap;
 extern crate csv;
 extern crate flate2;
+extern crate levenshtein_automata;
 extern crate serde;
 
 use clap::{App, Arg};
@@ -19,6 +20,8 @@ use std::io::BufReader;
 use std::str;
 
 use serde::Deserialize;
+
+use levenshtein_automata::{Distance, LevenshteinAutomatonBuilder};
 
 #[derive(Debug, Deserialize)]
 struct PrimerSet {
@@ -45,7 +48,7 @@ fn printrec(r: &Record, pname: &str, start: usize, end: usize) {
 
 fn main() {
     let args = App::new("amplicontig")
-        .version("0.1.0")
+        .version("0.1.2")
         .arg(
             Arg::with_name("primers")
                 .index(1)
@@ -77,6 +80,13 @@ fn main() {
                 .required(false)
                 .takes_value(true)
                 .help("trim bases from 3' end"),
+        )
+        .arg(
+            Arg::with_name("dist")
+                .short("d")
+                .required(false)
+                .takes_value(true)
+                .help("match at max Levenshtein distance"),
         )
         .arg(
             Arg::with_name("ex")
