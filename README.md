@@ -1,3 +1,5 @@
+[![Coverage Status](https://coveralls.io/repos/github/jeff-k/amplicontig/badge.svg?branch=main)](https://coveralls.io/github/jeff-k/amplicontig?branch=main)
+
 # amplicontig
 
 Identify paired reads that match primer sequences and assemble tiled amplicons.
