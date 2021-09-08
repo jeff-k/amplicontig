@@ -2,6 +2,7 @@ extern crate bio;
 extern crate clap;
 extern crate csv;
 extern crate flate2;
+extern crate levenshtein_automata;
 extern crate serde;
 
 use clap::{App, Arg};
@@ -21,6 +22,8 @@ use std::str;
 
 mod mating;
 use mating::{mate, mend_consensus, merge, truncate};
+
+use levenshtein_automata::{Distance, LevenshteinAutomatonBuilder};
 
 #[derive(Debug, Deserialize, Clone)]
 struct PrimerSet {
@@ -138,6 +141,13 @@ fn main() {
                 .required(false)
                 .takes_value(true)
                 .help("trim bases from 3' end"),
+        )
+        .arg(
+            Arg::with_name("dist")
+                .short("d")
+                .required(false)
+                .takes_value(true)
+                .help("match at max Levenshtein distance"),
         )
         .arg(
             Arg::with_name("test")
