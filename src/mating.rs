@@ -120,6 +120,27 @@ pub fn truncate(r1: &[u8], r2: &[u8], overlap: usize, mend: fn(u8, u8) -> u8) ->
     seq
 }
 
+fn merge_records(r1: &Record, r2: &Record) -> Option<Record> {
+    let r2_rc = dna::revcomp(r2.seq());
+    let r1_rc = dna::revcomp(r1.seq());
+
+    match mate(&r1.seq(), &r2_rc, 25, 20) {
+        Some(overlap) => {
+            let seq = merge(&r1.seq(), &r2_rc, overlap, mend_consensus);
+            let qual = merge(&r1.qual(), &r2.qual(), overlap, max);
+            Some(Record::with_attrs(r1.id(), None, &seq, &qual))
+        }
+        None => match mate(&r1_rc, &r2.seq(), 25, 20) {
+            Some(overlap) => {
+                let seq = truncate(&r1.seq(), &r2_rc, overlap, mend_consensus);
+                let qual = truncate(&r1.qual(), &r2.qual(), overlap, max);
+                Some(Record::with_attrs(r1.id(), None, &seq, &qual))
+            }
+            None => None,
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{mate, mend_consensus, merge, truncate};

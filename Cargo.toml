@@ -1,6 +1,6 @@
 [package]
 name = "amplicontig"
-version = "0.1.2"
+version = "0.1.3"
 authors = ["jeff-k <jeff_k@fastmail.com>"]
 edition = "2018"
 
@@ -11,4 +11,4 @@ flate2 = "*"
 csv = "*"
 serde = "*"
 trie = "*"
-levenshtein_automata = "*"
+fst = { version = "*", features = ["levenshtein"] }
