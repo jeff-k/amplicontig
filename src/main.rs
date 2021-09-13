@@ -67,8 +67,8 @@ impl<'a> MatchedReads<'a> {
         primers: &HashMap<String, PrimerSet>,
     ) -> MatchedReads {
         MatchedReads {
-            zipfq: zipfq,
-            primers: primers,
+            zipfq,
+            primers,
         }
     }
 }
