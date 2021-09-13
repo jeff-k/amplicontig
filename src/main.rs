@@ -7,14 +7,10 @@ extern crate serde;
 
 use clap::{App, Arg};
 
-use bio::alphabets::dna;
-use bio::io::fastq::{Error, Reader, Record};
+use bio::io::fastq::{Reader, Record};
 
 use flate2::bufread::MultiGzDecoder;
 
-use serde::Deserialize;
-use std::cmp::{max, min};
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 use std::process::exit;
@@ -107,13 +103,13 @@ fn main() {
         )
         .get_matches();
 
-    let primers = PrimerSet::new();
+    let primers = PrimerSet::from_csv(args.value_of("primers").unwrap().to_string());
     let mut stats = Stats {
         on_target: 0,
         off_target: 0,
         total_pairs: 0,
         matched: 0,
-        matedd: 0,
+        mated: 0,
     };
 
     let trim: usize = match args.value_of("trim") {
@@ -142,17 +138,17 @@ fn main() {
             (None, Some(_)) => stats.matched += 1,
             _ => (),
         }
-        stats.total_mated += 2;
+        stats.mated += 2;
 
         match (read1, read2) {
-            (Ok(r1), Ok(r2)) => {
+            (r1, r2) => {
                 if let Some(r) = merge_records(&r1, &r2) {
                     let rlen = r.seq().len();
                     if rlen < 100 {
                         continue;
                     }
 
-                    stats.total_mated += 1;
+                    stats.mated += 1;
                 }
             }
             _ => {
@@ -166,15 +162,15 @@ fn main() {
         eprintln!("{:?},{:?}", stats.matched, stats.total_pairs);
         exit(0);
     }
-    for (primer, reads) in stats.readbins {
-        print!(
-            "{}\t{}\t{}",
-            args.value_of("R1").unwrap(),
-            primer,
-            match stats.on_target.get(&primer) {
-                Some(n) => *n,
-                None => 0,
-            }
-        );
-    }
+    //for (primer, reads) in stats.readbins {
+    //    print!(
+    //        "{}\t{}\t{}",
+    //        args.value_of("R1").unwrap(),
+    //        primer,
+    //        match stats.on_target.get(&primer) {
+    //            Some(n) => *n,
+    //            None => 0,
+    //        }
+    //    );
+    //}
 }
