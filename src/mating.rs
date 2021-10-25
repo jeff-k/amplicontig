@@ -1,16 +1,5 @@
 //! Mate and merge overlapping paired sequences
 //!
-//! # Example
-//!
-//! ```
-//! use bio::pattern_matching::mating::{mate,merge};
-//! let read1 = b"tacgattcgat";
-//! let read2 = b"ttcgattacgt";
-//! let overlap = mate(read1, read2, 1, 1).unwrap();
-//! let contig = merge(read1, read2, overlap);
-//! assert_eq!(contig, b"tacgattcgattacgt");
-//! ```
-//!
 //! Mate pair merging proceeds in two steps:
 //! * mate: identifying the optimal overlap length or rejecting the case
 //! * merge: combines overlapping sequences
@@ -27,7 +16,6 @@ use std::cmp;
 use bio::alphabets::dna;
 use bio::io::fastq::Record;
 
-/// Determine the index of overlap for two reads.
 pub fn mate(r1: &[u8], r2: &[u8], overlap_bound: usize, min_score: i16) -> Option<usize> {
     let max_overlap = cmp::min(r1.len(), r2.len()) + 1;
     let min_overlap = overlap_bound - 1;
@@ -35,32 +23,6 @@ pub fn mate(r1: &[u8], r2: &[u8], overlap_bound: usize, min_score: i16) -> Optio
     let mut overlap: usize = 0;
     for i in min_overlap..max_overlap {
         let h = score(&r2[0..i], &r1[r1.len() - i..r1.len()]);
-        if h > m {
-            m = h;
-            overlap = i;
-        }
-    }
-    if m >= min_score {
-        return Some(overlap);
-    }
-    None
-}
-
-/// Mating with the Hamming rate objective function. Complexity: O(n^2).
-#[allow(dead_code)]
-pub fn mate_hamming_rate(
-    r1: &[u8],
-    r2: &[u8],
-    overlap_bound: usize,
-    min_score: i16,
-) -> Option<usize> {
-    let max_overlap = cmp::min(r1.len(), r2.len());
-    let min_overlap = overlap_bound - 1;
-    let mut m: i16 = 0;
-    let mut overlap: usize = 0;
-    for i in min_overlap..max_overlap {
-        //        let h = hamming(&r2[0..i], &r1[r1.len()-i..r1.len()]) / i;
-        let h = 0;
         if h > m {
             m = h;
             overlap = i;
@@ -87,7 +49,7 @@ fn score(r1: &[u8], r2: &[u8]) -> i16 {
 }
 
 /// Function that replaces disagreeing reads with 'N'.
-pub fn mend_consensus(a: u8, b: u8) -> u8 {
+fn mend_consensus(a: u8, b: u8) -> u8 {
     if a == b {
         a
     } else {
@@ -95,8 +57,30 @@ pub fn mend_consensus(a: u8, b: u8) -> u8 {
     }
 }
 
+/// Determine the index of overlap for two reads.
+/// Mating with the Hamming rate objective function. Complexity: O(n^2).
+#[allow(dead_code)]
+fn mate_hamming_rate(r1: &[u8], r2: &[u8], overlap_bound: usize, min_score: i16) -> Option<usize> {
+    let max_overlap = cmp::min(r1.len(), r2.len());
+    let min_overlap = overlap_bound - 1;
+    let mut m: i16 = 0;
+    let mut overlap: usize = 0;
+    for i in min_overlap..max_overlap {
+        //        let h = hamming(&r2[0..i], &r1[r1.len()-i..r1.len()]) / i;
+        let h = 0;
+        if h > m {
+            m = h;
+            overlap = i;
+        }
+    }
+    if m >= min_score {
+        return Some(overlap);
+    }
+    None
+}
+
 /// Given two reads and the index of overlap, merge them together.
-pub fn merge(r1: &[u8], r2: &[u8], overlap: usize, mend: fn(u8, u8) -> u8) -> Vec<u8> {
+fn merge(r1: &[u8], r2: &[u8], overlap: usize, mend: fn(u8, u8) -> u8) -> Vec<u8> {
     let r1_end = r1.len() - overlap;
     let r2_end = r2.len() - overlap;
     let len = r1_end + overlap + r2_end;
@@ -113,7 +97,7 @@ pub fn merge(r1: &[u8], r2: &[u8], overlap: usize, mend: fn(u8, u8) -> u8) -> Ve
 }
 
 /// Mend and return the overlapping region of two reads, given an index of overlap.
-pub fn truncate(r1: &[u8], r2: &[u8], overlap: usize, mend: fn(u8, u8) -> u8) -> Vec<u8> {
+fn truncate(r1: &[u8], r2: &[u8], overlap: usize, mend: fn(u8, u8) -> u8) -> Vec<u8> {
     let r2_end = r2.len();
 
     let mut seq = vec![0; overlap];
@@ -123,38 +107,92 @@ pub fn truncate(r1: &[u8], r2: &[u8], overlap: usize, mend: fn(u8, u8) -> u8) ->
     seq
 }
 
-pub fn merge_records(r1: &Record, r2: &Record) -> Option<Record> {
-    let r2_rc = dna::revcomp(r2.seq());
-    let r1_rc = dna::revcomp(r1.seq());
+pub struct ReadPair {
+    r1: Record,
+    r2: Record,
+}
 
-    match mate(&r1.seq(), &r2_rc, 25, 20) {
-        Some(overlap) => {
-            let seq = merge(&r1.seq(), &r2_rc, overlap, mend_consensus);
-            let qual = merge(&r1.qual(), &r2.qual(), overlap, cmp::max);
-            Some(Record::with_attrs(r1.id(), None, &seq, &qual))
-        }
-        None => match mate(&r1_rc, &r2.seq(), 25, 20) {
+impl ReadPair {
+    pub fn merge(self: Self) -> Option<Record> {
+        let r2_rc = dna::revcomp(&self.r2.seq());
+        let r1_rc = dna::revcomp(&self.r1.seq());
+
+        match mate(&self.r1.seq(), &r2_rc, 25, 20) {
             Some(overlap) => {
-                let seq = truncate(&r1.seq(), &r2_rc, overlap, mend_consensus);
-                let qual = truncate(&r1.qual(), &r2.qual(), overlap, cmp::max);
-                Some(Record::with_attrs(r1.id(), None, &seq, &qual))
+                let seq = merge(&self.r1.seq(), &self.r2_rc, overlap, mend_consensus);
+                let qual = merge(&self.r1.qual(), &self.r2.qual(), overlap, cmp::max);
+                Some(Record::with_attrs(self.r1.id(), None, &seq, &qual))
             }
             None => None,
-        },
+        }
+    }
+
+    pub fn merge_hint(self: Self, start: u8) -> Option<Record> {
+        let r2_rc = dna::revcomp(&self.r2.seq());
+        let r1_rc = dna::revcomp(&self.r1.seq());
+
+        match mate(&self.r1.seq(), &r2_rc, 25, 20) {
+            Some(overlap) => {
+                let seq = merge(&self.r1.seq(), &self.r2_rc, overlap, mend_consensus);
+                let qual = merge(&self.r1.qual(), &self.r2.qual(), overlap, cmp::max);
+                Some(Record::with_attrs(self.r1.id(), None, &seq, &qual))
+            }
+            None => None,
+        }
     }
 }
 
-fn printrec(r: &Record, pname: &str, start: usize, end: usize) {
-    let desc = format!("{}:{}", pname, r.desc().unwrap());
-    print!(
-        "{}",
-        Record::with_attrs(
-            r.id(),
-            Some(&desc),
-            &r.seq()[start..end],
-            &r.qual()[start..end]
-        )
-    );
+impl Record {
+    pub fn print_primer(self: Self, pname: &str, start: usize, end: usize) {
+        let desc = format!("{}:{}", pname, r.desc().unwrap());
+        print!(
+            "{}",
+            Record::with_attrs(
+                r.id(),
+                Some(&desc),
+                &r.seq()[start..end],
+                &r.qual()[start..end]
+            )
+        );
+    }
+}
+
+pub struct MatchedReads<'a> {
+    zipfq: Box<dyn Iterator<Item = (Result<Record, Error>, Result<Record, Error>)>>,
+    primers: &'a PrimerSet,
+}
+
+impl<'a> Iterator for MatchedReads<'a> {
+    type Item = (Record, Option<&'a Primer>, Record, Option<&'a Primer>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.zipfq.next() {
+            Some((rec1, rec2)) => match (rec1, rec2) {
+                (Ok(r1), Ok(r2)) => {
+                    let plen = 22;
+                    let p1 = String::from_utf8(r1.seq()[..plen].to_vec()).unwrap();
+                    let p2 = String::from_utf8(r2.seq()[..plen].to_vec()).unwrap();
+
+                    //Some((r1, self.primers.get(&p1), r2, self.primers.get(&p2)))
+                    Some((r1, None, r2, None))
+                }
+                _ => {
+                    eprintln!("Mismatched fastq files (different lengths)");
+                    exit(1);
+                }
+            },
+            None => None,
+        }
+    }
+}
+
+impl<'a> MatchedReads<'a> {
+    pub fn new(
+        zipfq: Box<dyn Iterator<Item = (Result<Record, Error>, Result<Record, Error>)>>,
+        primers: &PrimerSet,
+    ) -> MatchedReads {
+        MatchedReads { zipfq, primers }
+    }
 }
 
 #[cfg(test)]
