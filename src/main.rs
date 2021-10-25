@@ -1,4 +1,5 @@
 extern crate bio;
+#[macro_use]
 extern crate clap;
 extern crate csv;
 extern crate flate2;
@@ -36,72 +37,29 @@ fn printrec(r: &Record, pname: &str, start: usize, end: usize) {
 }
 
 fn main() {
-    let args = App::new("amplicontig")
-        .version("0.1.3")
-        .arg(
-            Arg::with_name("primers")
-                .index(1)
-                .help("csv file for primer set"),
+    let args = clap_app!(myapp =>
+        (version: "0.1.4")
+        (author: "github.com/jeff-k")
+        (about: "assemble reads from amplicon sequencing data")
+        (@arg primers: +required "primer set")
+        (@arg R1: +required "R1 reads")
+        (@arg R2: +required "R2 reads")
+        (@arg prefix: -p --prefix "set the output file(s) prefix")
+        (@arg stats: -v "report primer match stats")
+        (@subcommand test =>
+            (about: "test reads against a set of primers")
         )
-        .arg(Arg::with_name("R1").index(2).help("R1 reads"))
-        .arg(Arg::with_name("R2").index(3).help("R2 reads (reversed)"))
-        .arg(
-            Arg::with_name("invert")
-                .short("n")
-                .required(false)
-                .takes_value(false)
-                .help("invert selection"),
+        (@subcommand match =>
+            (about: "match reads against a primer set")
+            (@arg trim: -t --trim "trim primer bases")
+            (@arg merge: -m --merge "merge mated reads")
+            (@arg filter: -f --filter "save unmatched reads")
         )
-        .arg(
-            Arg::with_name("stats")
-                .short("s")
-                .required(false)
-                .takes_value(false)
-                .help("print stats about primer performance"),
+        (@subcommand assemble =>
+            (about: "bin matched and merged read pairs into consensus")
         )
-        .arg(
-            Arg::with_name("trim")
-                .short("t")
-                .required(false)
-                .takes_value(true)
-                .help("trim bases from 3' end"),
-        )
-        .arg(
-            Arg::with_name("dist")
-                .short("d")
-                .required(false)
-                .takes_value(true)
-                .help("match at max Levenshtein distance"),
-        )
-        .arg(
-            Arg::with_name("test")
-                .required(false)
-                .short("z")
-                .takes_value(false)
-                .help("test whether fastq(s) match primer set"),
-        )
-        .arg(
-            Arg::with_name("ex")
-                .short("x")
-                .required(false)
-                .takes_value(false)
-                .help("excise primer sequence from reads"),
-        )
-        .arg(
-            Arg::with_name("merge")
-                .short("m")
-                .required(false)
-                .takes_value(false)
-                .help("merge mated reads (single fastq output)"),
-        )
-        .arg(
-            Arg::with_name("prefix")
-                .short("p")
-                .required(false)
-                .takes_value(true)
-                .help("output file prefixes: {prefix}.matched.fq"),
-        )
-        .get_matches();
+    )
+    .get_matches();
 
     let primers = PrimerSet::from_csv(args.value_of("primers").unwrap().to_string());
     let mut stats = Stats {
