@@ -144,6 +144,19 @@ pub fn merge_records(r1: &Record, r2: &Record) -> Option<Record> {
     }
 }
 
+fn printrec(r: &Record, pname: &str, start: usize, end: usize) {
+    let desc = format!("{}:{}", pname, r.desc().unwrap());
+    print!(
+        "{}",
+        Record::with_attrs(
+            r.id(),
+            Some(&desc),
+            &r.seq()[start..end],
+            &r.qual()[start..end]
+        )
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::{mate, mend_consensus, merge, truncate};

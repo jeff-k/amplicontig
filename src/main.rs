@@ -23,19 +23,6 @@ mod primerset;
 use mating::merge_records;
 use primerset::{MatchedReads, PrimerSet, Stats};
 
-fn printrec(r: &Record, pname: &str, start: usize, end: usize) {
-    let desc = format!("{}:{}", pname, r.desc().unwrap());
-    print!(
-        "{}",
-        Record::with_attrs(
-            r.id(),
-            Some(&desc),
-            &r.seq()[start..end],
-            &r.qual()[start..end]
-        )
-    );
-}
-
 fn main() {
     let args = clap_app!(myapp =>
         (version: "0.1.4")

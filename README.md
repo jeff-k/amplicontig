@@ -8,34 +8,37 @@ This approach is valid for non-fragmented sequencing protocols.
 
 ### Synopsis
 ```
-amplicontig 0.1.2
+amplicontig 0.1.5
 
 USAGE:
-    amplicontig [FLAGS] [OPTIONS] [ARGS]
+    amplicontig [FLAGS] <primers> <R1> <R2> [SUBCOMMAND]
 
 FLAGS:
-    -x               excise primer sequence from reads
     -h, --help       Prints help information
-    -n               invert selection (show unmatching reads)
-    -s               print stats about primer performance
+    -p, --prefix     set the output file(s) prefix
+    -v               report primer match stats
     -V, --version    Prints version information
 
-OPTIONS:
-    -t <trim>        trim bases from 3' end
-
 ARGS:
-    <primers>    csv file for primer set
-    <R1>         first reads in pairs
-    <R2>         second reads in pairs (reversed)
+    <primers>    primer set
+    <R1>         R1 reads
+    <R2>         R2 reads
+
+SUBCOMMANDS:
+    assemble    bin matched and merged read pairs into consensus
+    help        Prints this message or the help of the given subcommand(s)
+    match       match reads against a primer set
+    test        test reads against a set of primers
 ```
 
 #### Primer spec
 
 example:
 ```
-name,forward,primer,position
-nCoV-2019_1_LEFT,true,ACCAACCAACTTTCGATCTCTTGT,30
-nCoV-2019_1_RIGHT,false,CATCTTTAAGATGTTGACGTGCCTC,230
+amplicon,name,left,forward,primer,position
+nCoV-2019_1,LEFT,true,true,ACCAACCAACTTTCGATCTCTTGT,30
+nCoV-2019_1,RIGHT,false,false,CATCTTTAAGATGTTGACGTGCCTC,230
+nCoV-2019_1,RIGHT_alt,false,false,GTCTTTAAGATGTTGACGTGCC,229
 ```
 
 ### Installation
@@ -46,7 +49,7 @@ cargo build --release
 
 ### Examples
 
-`target/release/amplicontig -s artic-v3.csv ERR4659819_1.fastq.gz ERR4659819_2.fastq.gz`
+`target/release/amplicontig artic-v3.csv ERR4659819_1.fastq.gz ERR4659819_2.fastq.gz test`
 
 ## Pipeline Description
 

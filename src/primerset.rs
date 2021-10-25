@@ -12,18 +12,28 @@ use bio::io::fastq::{Error, Record};
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Primer {
+    amplicon: String,
     name: String,
     primer: String,
+    left: bool,
     forward: bool,
     index: u32,
+    length: u8,
 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct PrimerSet {
     name: String,
+    forward: BTree<String, Primer>,
+    reverse: BTree<String, Primer>,
 }
 
 impl PrimerSet {
+    pub fn from_json(path: String) -> PrimerSet {
+        PrimerSet {
+            name: "asdf".to_string(),
+        }
+    }
     pub fn from_csv(path: String) -> PrimerSet {
         let _l = Levenshtein::new("foo", 3);
         //    let mut readbins = HashMap::new();
