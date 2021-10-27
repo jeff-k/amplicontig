@@ -5,10 +5,13 @@ use std::fs::File;
 //use std::io::BufReader;
 use std::process::exit;
 
-use fst::automaton::Levenshtein;
+//use fst::automaton::Levenshtein;
 use serde::Deserialize;
 
-use bio::io::fastq::{Error, Record};
+use bio::alphabets::dna;
+use bio::io::fastq::Error;
+
+use mating::Record;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Primer {
@@ -105,6 +108,19 @@ impl<'a> MatchedReads<'a> {
         primers: &PrimerSet,
     ) -> MatchedReads {
         MatchedReads { zipfq, primers }
+    }
+
+    pub fn from_fqs(fq1fn: String, fq2fn: String, primers: &PrimerSet) -> MatchedReads {
+        let fq1 = Reader::new(MultiGzDecoder::new(BufReader::new(
+            File::open(fq1fn).unwrap(),
+        )))
+        .records();
+        let fq2 = Reader::new(MultiGzDecoder::new(BufReader::new(
+            File::open(fq2fn).unwrap(),
+        )))
+        .records();
+
+        MatchedReads::new(Box::new(fq1.zip(fq2)), primers)
     }
 }
 

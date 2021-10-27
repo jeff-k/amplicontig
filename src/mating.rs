@@ -143,7 +143,7 @@ impl ReadPair {
 }
 
 impl Record {
-    pub fn print_primer(self: Self, pname: &str, start: usize, end: usize) {
+    pub fn print(self: Self, pname: &str, start: usize, end: usize) {
         let desc = format!("{}:{}", pname, r.desc().unwrap());
         print!(
             "{}",
@@ -154,44 +154,6 @@ impl Record {
                 &r.qual()[start..end]
             )
         );
-    }
-}
-
-pub struct MatchedReads<'a> {
-    zipfq: Box<dyn Iterator<Item = (Result<Record, Error>, Result<Record, Error>)>>,
-    primers: &'a PrimerSet,
-}
-
-impl<'a> Iterator for MatchedReads<'a> {
-    type Item = (Record, Option<&'a Primer>, Record, Option<&'a Primer>);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.zipfq.next() {
-            Some((rec1, rec2)) => match (rec1, rec2) {
-                (Ok(r1), Ok(r2)) => {
-                    let plen = 22;
-                    let p1 = String::from_utf8(r1.seq()[..plen].to_vec()).unwrap();
-                    let p2 = String::from_utf8(r2.seq()[..plen].to_vec()).unwrap();
-
-                    //Some((r1, self.primers.get(&p1), r2, self.primers.get(&p2)))
-                    Some((r1, None, r2, None))
-                }
-                _ => {
-                    eprintln!("Mismatched fastq files (different lengths)");
-                    exit(1);
-                }
-            },
-            None => None,
-        }
-    }
-}
-
-impl<'a> MatchedReads<'a> {
-    pub fn new(
-        zipfq: Box<dyn Iterator<Item = (Result<Record, Error>, Result<Record, Error>)>>,
-        primers: &PrimerSet,
-    ) -> MatchedReads {
-        MatchedReads { zipfq, primers }
     }
 }
 

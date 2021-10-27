@@ -20,12 +20,11 @@ use std::str;
 mod mating;
 mod primerset;
 
-use mating::merge_records;
 use primerset::{MatchedReads, PrimerSet, Stats};
 
 fn main() {
     let args = clap_app!(myapp =>
-        (version: "0.1.4")
+        (version: crate_version!())
         (author: "github.com/jeff-k")
         (about: "assemble reads from amplicon sequencing data")
         (@arg primers: +required "primer set")
@@ -62,60 +61,47 @@ fn main() {
         None => 0,
     };
 
-    let fq1 = Reader::new(MultiGzDecoder::new(BufReader::new(
-        File::open(args.value_of("R1").unwrap()).unwrap(),
-    )))
-    .records();
-    let fq2 = Reader::new(MultiGzDecoder::new(BufReader::new(
-        File::open(args.value_of("R2").unwrap()).unwrap(),
-    )))
-    .records();
-
-    let test_pset = args.is_present("test");
-    let grep = !(args.is_present("stats"));
-    let invert = args.is_present("invert");
-    let excise = args.is_present("ex");
-
-    for (read1, p1, read2, p2) in MatchedReads::new(Box::new(fq1.zip(fq2)), &primers) {
-        match (p1, p2) {
-            (Some(_), Some(_)) => stats.matched += 2,
-            (Some(_), None) => stats.matched += 1,
-            (None, Some(_)) => stats.matched += 1,
-            _ => (),
-        }
-        stats.mated += 2;
-
-        match (read1, read2) {
-            (r1, r2) => {
-                if let Some(r) = merge_records(&r1, &r2) {
-                    let rlen = r.seq().len();
-                    if rlen < 100 {
-                        continue;
-                    }
-
-                    stats.mated += 1;
+    match matches.subcommand() {
+        ("test", Some(test_args)) => {
+            for readpair in reads {
+                match (readpair.p1, readpair.p2) {
+                    (Some(_), Some(_)) => stats.matched += 2,
+                    (Some(_), None) => stats.matched += 1,
+                    (None, Some(_)) => stats.matched += 1,
                 }
             }
-            _ => {
-                eprintln!("Not proper fastq file pair");
-                exit(1);
+
+            eprintln!("{:?},{:?}", stats.matched, stats.total_pairs);
+        }
+        ("match", Some(match_args)) => {
+            for readpair in reads {
+                match (p1, p2) {
+                    _ => (),
+                }
+                stats.mated += 2;
+
+                match (read1, read2) {
+                    (r1, r2) => {
+                        if let Some(r) = merge_records(&r1, &r2) {
+                            let rlen = r.seq().len();
+                            if rlen < 100 {
+                                continue;
+                            }
+
+                            stats.mated += 1;
+                        }
+                    }
+                    _ => {
+                        eprintln!("Not proper fastq file pair");
+                        exit(1);
+                    }
+                }
             }
         }
-    }
 
-    if test_pset {
-        eprintln!("{:?},{:?}", stats.matched, stats.total_pairs);
-        exit(0);
+        ("assemble", Some(assemble_args)) => {
+            eprintln!("assemble reads");
+            exit(1);
+        }
     }
-    //for (primer, reads) in stats.readbins {
-    //    print!(
-    //        "{}\t{}\t{}",
-    //        args.value_of("R1").unwrap(),
-    //        primer,
-    //        match stats.on_target.get(&primer) {
-    //            Some(n) => *n,
-    //            None => 0,
-    //        }
-    //    );
-    //}
 }
