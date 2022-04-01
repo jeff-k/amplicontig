@@ -13,9 +13,6 @@
 
 use std::cmp;
 
-use bio::alphabets::dna;
-use bio::io::fastq::Record;
-
 pub fn mate(r1: &[u8], r2: &[u8], overlap_bound: usize, min_score: i16) -> Option<usize> {
     let max_overlap = cmp::min(r1.len(), r2.len()) + 1;
     let min_overlap = overlap_bound - 1;
@@ -107,17 +104,23 @@ fn truncate(r1: &[u8], r2: &[u8], overlap: usize, mend: fn(u8, u8) -> u8) -> Vec
     seq
 }
 
-pub struct ReadPair {
-    r1: Record,
-    r2: Record,
-}
+pub fn find_merge(r1: Record, r2: Record) -> Option<Record> {
+        let r2_rc = r2.rc();
+        let r1_rc = r1.rc();
 
-impl ReadPair {
-    pub fn merge(self: Self) -> Option<Record> {
-        let r2_rc = dna::revcomp(&self.r2.seq());
-        let r1_rc = dna::revcomp(&self.r1.seq());
+        match mate(r1.seq, &r2_rc, 25, 20) {
+            Some(overlap) => {
+                let seq = merge(r1.seq, &self.r2_rc, overlap, mend_consensus);
+            }
+            None => None,
+        }
+    }
 
-        match mate(&self.r1.seq(), &r2_rc, 25, 20) {
+    pub fn merge_hint(r1: Record, r2: Record, hint: u8) -> Option<Record> {
+        let r2_rc = dna::revcomp(r2.seq);
+        let r1_rc = dna::revcomp(r1.seq);
+
+        match mate(r1.seq(), &r2_rc, 25, 20) {
             Some(overlap) => {
                 let seq = merge(&self.r1.seq(), &self.r2_rc, overlap, mend_consensus);
                 let qual = merge(&self.r1.qual(), &self.r2.qual(), overlap, cmp::max);
@@ -125,35 +128,6 @@ impl ReadPair {
             }
             None => None,
         }
-    }
-
-    pub fn merge_hint(self: Self, start: u8) -> Option<Record> {
-        let r2_rc = dna::revcomp(&self.r2.seq());
-        let r1_rc = dna::revcomp(&self.r1.seq());
-
-        match mate(&self.r1.seq(), &r2_rc, 25, 20) {
-            Some(overlap) => {
-                let seq = merge(&self.r1.seq(), &self.r2_rc, overlap, mend_consensus);
-                let qual = merge(&self.r1.qual(), &self.r2.qual(), overlap, cmp::max);
-                Some(Record::with_attrs(self.r1.id(), None, &seq, &qual))
-            }
-            None => None,
-        }
-    }
-}
-
-impl Record {
-    pub fn print(self: Self, pname: &str, start: usize, end: usize) {
-        let desc = format!("{}:{}", pname, r.desc().unwrap());
-        print!(
-            "{}",
-            Record::with_attrs(
-                r.id(),
-                Some(&desc),
-                &r.seq()[start..end],
-                &r.qual()[start..end]
-            )
-        );
     }
 }
 

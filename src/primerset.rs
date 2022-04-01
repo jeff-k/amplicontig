@@ -1,11 +1,7 @@
 extern crate csv;
-extern crate fst;
 
-use std::fs::File;
-//use std::io::BufReader;
 use std::process::exit;
 
-//use fst::automaton::Levenshtein;
 use serde::Deserialize;
 
 use bio::alphabets::dna;
@@ -14,15 +10,28 @@ use bio::io::fastq::Error;
 use mating::Record;
 
 #[derive(Debug, Deserialize, Clone)]
-pub struct Primer {
-    amplicon: String,
+pub struct PrimerRow {
     name: String,
-    primer: String,
+    seq: String,
     left: bool,
     forward: bool,
     index: u32,
     length: u8,
 }
+
+pub struct PrimerRow {
+    seq: String,
+    left: bool,
+    index: u32,
+    length: u8,
+}
+
+pub struct Amplicon {
+    name: String,
+    left: Primer,
+    right: Primer,
+}
+
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct PrimerSet {
@@ -32,19 +41,14 @@ pub struct PrimerSet {
 }
 
 impl PrimerSet {
-    pub fn from_json(path: String) -> PrimerSet {
-        PrimerSet {
-            name: "asdf".to_string(),
-        }
-    }
-    pub fn from_csv(path: String) -> PrimerSet {
-        let _l = Levenshtein::new("foo", 3);
-        //    let mut readbins = HashMap::new();
+    pub fn from_csv(src: Reader) -> PrimerSet {
+        let mut readbins = HashMap::new();
         let plen = 100;
         let pmax = 0;
 
         let mut primer_recs = Vec::new();
-        for result in csv::Reader::from_reader(File::open(path).unwrap()).deserialize() {
+
+        for result in csv::Reader::from_reader(src).deserialize() {
             let record: PrimerSet = result.unwrap();
             //let l = record.primer.len();
             //plen = min(l, plen);
