@@ -12,6 +12,7 @@
 //! from the k-mer distribution. 25bp is the apparent standard.
 
 use std::cmp;
+use crate::fastq::Record;
 
 pub fn mate(r1: &[u8], r2: &[u8], overlap_bound: usize, min_score: i16) -> Option<usize> {
     let max_overlap = cmp::min(r1.len(), r2.len()) + 1;
@@ -110,24 +111,23 @@ pub fn find_merge(r1: Record, r2: Record) -> Option<Record> {
 
         match mate(r1.seq, &r2_rc, 25, 20) {
             Some(overlap) => {
-                let seq = merge(r1.seq, &self.r2_rc, overlap, mend_consensus);
+                let seq = merge(r1.seq, &r2_rc, overlap, mend_consensus);
             }
             None => None,
         }
-    }
+}
 
-    pub fn merge_hint(r1: Record, r2: Record, hint: u8) -> Option<Record> {
-        let r2_rc = dna::revcomp(r2.seq);
-        let r1_rc = dna::revcomp(r1.seq);
+pub fn merge_hint(r1: Record, r2: Record, hint: u8) -> Option<Record> {
+    let r2_rc = dna::revcomp(r2.seq);
+    let r1_rc = dna::revcomp(r1.seq);
 
-        match mate(r1.seq(), &r2_rc, 25, 20) {
-            Some(overlap) => {
-                let seq = merge(&self.r1.seq(), &self.r2_rc, overlap, mend_consensus);
-                let qual = merge(&self.r1.qual(), &self.r2.qual(), overlap, cmp::max);
-                Some(Record::with_attrs(self.r1.id(), None, &seq, &qual))
-            }
-            None => None,
+    match mate(r1.seq(), &r2_rc, 25, 20) {
+        Some(overlap) => {
+            let seq = merge(r1.seq(), &r2_rc, overlap, mend_consensus);
+            let qual = merge(r1.qual(), r2.qual(), overlap, cmp::max);
+            Some(Record::with_attrs(r1.id(), None, &seq, &qual))
         }
+        None => None,
     }
 }
 

@@ -1,27 +1,17 @@
 extern crate csv;
 
-use std::process::exit;
+use std::fs::File;
 
 use serde::Deserialize;
 
-use bio::alphabets::dna;
-use bio::io::fastq::Error;
-
-use mating::Record;
+use std::collections::HashMap;
 
 #[derive(Debug, Deserialize, Clone)]
-pub struct PrimerRow {
+pub struct Primer {
     name: String,
     seq: String,
     left: bool,
     forward: bool,
-    index: u32,
-    length: u8,
-}
-
-pub struct PrimerRow {
-    seq: String,
-    left: bool,
     index: u32,
     length: u8,
 }
@@ -32,24 +22,25 @@ pub struct Amplicon {
     right: Primer,
 }
 
-
 #[derive(Debug, Deserialize, Clone)]
 pub struct PrimerSet {
     name: String,
-    forward: BTree<String, Primer>,
-    reverse: BTree<String, Primer>,
+    forward: HashMap<String, Primer>,
+    reverse: HashMap<String, Primer>,
 }
 
 impl PrimerSet {
-    pub fn from_csv(src: Reader) -> PrimerSet {
-        let mut readbins = HashMap::new();
+    pub fn from_csv(src: String) -> PrimerSet {
+        let mut rdr = csv::Reader::from_reader(File::open(src).unwrap());
+        let mut forward = HashMap::new();
+        let mut reverse = HashMap::new();
         let plen = 100;
         let pmax = 0;
 
         let mut primer_recs = Vec::new();
 
-        for result in csv::Reader::from_reader(src).deserialize() {
-            let record: PrimerSet = result.unwrap();
+        for result in rdr.deserialize() {
+            let record: Primer = result.unwrap();
             //let l = record.primer.len();
             //plen = min(l, plen);
             //pmax = max(l, pmax);
@@ -65,6 +56,8 @@ impl PrimerSet {
         //}
         PrimerSet {
             name: "asdf".to_string(),
+            forward: forward,
+            reverse: reverse,
         }
     }
     fn get(self: Self, p: &str) -> Option<&Primer> {
@@ -77,6 +70,7 @@ impl PrimerSet {
     }
 }
 
+/*
 pub struct MatchedReads<'a> {
     zipfq: Box<dyn Iterator<Item = (Result<Record, Error>, Result<Record, Error>)>>,
     primers: &'a PrimerSet,
@@ -127,7 +121,7 @@ impl<'a> MatchedReads<'a> {
         MatchedReads::new(Box::new(fq1.zip(fq2)), primers)
     }
 }
-
+*/
 pub struct Stats {
     pub on_target: u32,
     pub off_target: u32,
