@@ -1,131 +1,101 @@
 extern crate csv;
 
+use core::cmp::{max, min};
 use std::fs::File;
+use std::path::PathBuf;
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 
 use std::collections::HashMap;
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct Primer {
-    name: String,
-    seq: String,
-    left: bool,
-    forward: bool,
-    index: u32,
-    length: u8,
+    pub name: String,
+    pub forward: bool,
+    pub seq: String, //Vec<u8>,
+    //    left: bool,
+    pub index: usize,
+    //    length: u8,
 }
 
-pub struct Amplicon {
-    name: String,
-    left: Primer,
-    right: Primer,
-}
-
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Clone)]
 pub struct PrimerSet {
     name: String,
-    forward: HashMap<String, Primer>,
-    reverse: HashMap<String, Primer>,
+    plen: usize,
+    forward: HashMap<Vec<u8>, Primer>,
+    reverse: HashMap<Vec<u8>, Primer>,
 }
 
 impl PrimerSet {
-    pub fn from_csv(src: String) -> PrimerSet {
+    pub fn from_csv(src: &PathBuf) -> PrimerSet {
         let mut rdr = csv::Reader::from_reader(File::open(src).unwrap());
         let mut forward = HashMap::new();
         let mut reverse = HashMap::new();
-        let plen = 100;
-        let pmax = 0;
+        let mut pmax = 0;
+        let mut plen = 100;
 
-        let mut primer_recs = Vec::new();
+        let mut primers = Vec::new();
 
         for result in rdr.deserialize() {
-            let record: Primer = result.unwrap();
-            //let l = record.primer.len();
-            //plen = min(l, plen);
-            //pmax = max(l, pmax);
-            primer_recs.push(record);
+            let rx: Primer = result.unwrap();
+            let index = if rx.forward {
+                rx.index
+            } else {
+                rx.index + rx.seq.len()
+            };
+            let record = Primer {
+                name: rx.name,
+                forward: rx.forward,
+                seq: rx.seq,
+                index,
+            };
+            let l = record.seq.len();
+            plen = min(l, plen);
+            pmax = max(l, pmax);
+            primers.push(record);
         }
 
-        //for record in primer_recs {
-        //    let primer = String::from(&record.primer[..plen]);
-        //    let name = String::from(&record.name);
-        //primers.insert(primer, record);
-        //        readbins.insert(name, BTreeMap::new());
-        //        primers.insert(String::from(dna::revcomp(primer)), record);
-        //}
+        for primer in primers {
+            if primer.forward {
+                forward.insert(primer.seq[..plen].into(), primer.clone());
+            } else {
+                reverse.insert(primer.seq[..plen].into(), primer.clone());
+            }
+        }
         PrimerSet {
             name: "asdf".to_string(),
+            plen: plen,
             forward: forward,
             reverse: reverse,
         }
     }
-    fn get(self: Self, p: &str) -> Option<&Primer> {
-        //        Some(Primer {
-        //    primer: "asdf".to_string(),
-        //    forward: true,
-        //    index: 0,
-        //name: "asdf".to_string() })
-        None
-    }
-}
-
-/*
-pub struct MatchedReads<'a> {
-    zipfq: Box<dyn Iterator<Item = (Result<Record, Error>, Result<Record, Error>)>>,
-    primers: &'a PrimerSet,
-}
-
-impl<'a> Iterator for MatchedReads<'a> {
-    type Item = (Record, Option<&'a Primer>, Record, Option<&'a Primer>);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.zipfq.next() {
-            Some((rec1, rec2)) => match (rec1, rec2) {
-                (Ok(r1), Ok(r2)) => {
-                    let plen = 22;
-                    let p1 = String::from_utf8(r1.seq()[..plen].to_vec()).unwrap();
-                    let p2 = String::from_utf8(r2.seq()[..plen].to_vec()).unwrap();
-
-                    //Some((r1, self.primers.get(&p1), r2, self.primers.get(&p2)))
-                    Some((r1, None, r2, None))
-                }
-                _ => {
-                    eprintln!("Mismatched fastq files (different lengths)");
-                    exit(1);
-                }
+    pub fn get(self: &Self, p: &[u8]) -> Option<&Primer> {
+        match self.forward.get(&p[..self.plen]) {
+            Some(p) => Some(p),
+            None => match self.reverse.get(&p[..self.plen]) {
+                Some(p) => Some(p),
+                None => None,
             },
-            None => None,
         }
     }
 }
 
-impl<'a> MatchedReads<'a> {
-    pub fn new(
-        zipfq: Box<dyn Iterator<Item = (Result<Record, Error>, Result<Record, Error>)>>,
-        primers: &PrimerSet,
-    ) -> MatchedReads {
-        MatchedReads { zipfq, primers }
-    }
-
-    pub fn from_fqs(fq1fn: String, fq2fn: String, primers: &PrimerSet) -> MatchedReads {
-        let fq1 = Reader::new(MultiGzDecoder::new(BufReader::new(
-            File::open(fq1fn).unwrap(),
-        )))
-        .records();
-        let fq2 = Reader::new(MultiGzDecoder::new(BufReader::new(
-            File::open(fq2fn).unwrap(),
-        )))
-        .records();
-
-        MatchedReads::new(Box::new(fq1.zip(fq2)), primers)
-    }
-}
-*/
 pub struct Stats {
     pub on_target: u32,
     pub off_target: u32,
     pub total_pairs: u32,
     pub matched: u32,
     pub mated: u32,
+}
+
+impl Stats {
+    pub fn new() -> Self {
+        Stats {
+            on_target: 0,
+            off_target: 0,
+            total_pairs: 0,
+            matched: 0,
+            mated: 0,
+        }
+    }
 }

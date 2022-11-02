@@ -1,12 +1,13 @@
 [package]
 name = "amplicontig"
-version = "0.3.0"
+version = "0.6.0"
 authors = ["jeff-k <jeff_k@fastmail.com>"]
 edition = "2021"
 
 [dependencies]
-bio = "*"
-clap = { version = "^3.1", features = ["cargo"] }
-flate2 = "*"
-csv = "^1.1"
-serde = "*"
+bio-seq = "0.8"
+bio-streams = { git="https://github.com/jeff-k/bio-streams.git" }
+clap = { version = "4", features = ["derive"] }
+flate2 = "1"
+csv = "1"
+serde = { version = "1", features = ["derive"] }

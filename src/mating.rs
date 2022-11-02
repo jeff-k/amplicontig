@@ -1,5 +1,16 @@
 //! Mate and merge overlapping paired sequences
 //!
+//! # Example
+//!
+//! ```
+//! use bio::pattern_matching::mating::{mate,merge};
+//! let read1 = b"tacgattcgat";
+//! let read2 = b"ttcgattacgt";
+//! let overlap = mate(read1, read2, 1, 1).unwrap();
+//! let contig = merge(read1, read2, overlap);
+//! assert_eq!(contig, b"tacgattcgattacgt");
+//! ```
+//!
 //! Mate pair merging proceeds in two steps:
 //! * mate: identifying the optimal overlap length or rejecting the case
 //! * merge: combines overlapping sequences
@@ -12,53 +23,69 @@
 //! from the k-mer distribution. 25bp is the apparent standard.
 
 use std::cmp;
-use crate::fastq::Record;
 
-pub fn mate(r1: &[u8], r2: &[u8], overlap_bound: usize, min_score: i16) -> Option<usize> {
-    let max_overlap = cmp::min(r1.len(), r2.len()) + 1;
-    let min_overlap = overlap_bound - 1;
-    let mut m: i16 = 0;
-    let mut overlap: usize = 0;
-    for i in min_overlap..max_overlap {
-        let h = score(&r2[0..i], &r1[r1.len() - i..r1.len()]);
-        if h > m {
-            m = h;
-            overlap = i;
+#[inline]
+pub fn rc(seq: &[u8]) -> Vec<u8> {
+    let mut rev: Vec<u8> = vec![];
+
+    for b in seq.iter().rev() {
+        rev.push(match b {
+            b'A' => b'T',
+            b'C' => b'G',
+            b'G' => b'C',
+            b'T' => b'A',
+            b'N' => b'N',
+            _ => panic!(),
+        });
+    }
+    rev
+}
+
+/// Determine the index of overlap for two reads.
+#[inline]
+pub fn mate(r1: &[u8], r2: &[u8], hint: usize, indel: usize) -> Option<usize> {
+    let x = (r1.len() - hint) * 2;
+    if x >= r1.len() {
+        return None;
+    }
+    let mut m: i16 = score(&r2[..x], &r1[r1.len() - x..]);
+    let mut overlap: usize = r1.len() - x;
+
+    for i in 1..indel {
+        if x > i {
+            // search to the left
+            let l = x - i;
+            let hl = score(&r2[0..l], &r1[r1.len() - l..r1.len()]) - i as i16;
+            if hl > m {
+                m = hl;
+                overlap = r1.len() - l;
+            }
+        }
+
+        // search to the right
+        let r = x + i;
+        if r < r2.len() {
+            let hr = score(&r2[0..r], &r1[r1.len() - r..r1.len()]) - i as i16;
+            if hr > m {
+                m = hr;
+                overlap = r1.len() - r;
+            }
         }
     }
-    if m >= min_score {
+    if m >= 30 {
         return Some(overlap);
     }
     None
 }
 
-/// Mating objective function that penalizes mismatches.
-fn score(r1: &[u8], r2: &[u8]) -> i16 {
-    let mut s: i16 = 0;
-    let len = r1.len();
-    for i in 0..len {
-        if r1[i] == r2[i] {
-            s += 1;
-        } else {
-            s -= 1;
-        }
-    }
-    s
-}
-
-/// Function that replaces disagreeing reads with 'N'.
-fn mend_consensus(a: u8, b: u8) -> u8 {
-    if a == b {
-        a
-    } else {
-        b'N'
-    }
-}
-
-/// Determine the index of overlap for two reads.
 /// Mating with the Hamming rate objective function. Complexity: O(n^2).
 #[allow(dead_code)]
-fn mate_hamming_rate(r1: &[u8], r2: &[u8], overlap_bound: usize, min_score: i16) -> Option<usize> {
+pub fn mate_hamming_rate(
+    r1: &[u8],
+    r2: &[u8],
+    overlap_bound: usize,
+    min_score: i16,
+) -> Option<usize> {
     let max_overlap = cmp::min(r1.len(), r2.len());
     let min_overlap = overlap_bound - 1;
     let mut m: i16 = 0;
@@ -77,25 +104,51 @@ fn mate_hamming_rate(r1: &[u8], r2: &[u8], overlap_bound: usize, min_score: i16)
     None
 }
 
+/// Mating objective function that penalizes mismatches.
+#[inline]
+fn score(r1: &[u8], r2: &[u8]) -> i16 {
+    let mut s: i16 = 0;
+    let len = r1.len();
+    for i in 0..len {
+        if r1[i] == r2[i] {
+            s += 1;
+        } else {
+            s -= 1;
+        }
+    }
+    s
+}
+
+/// Function that replaces disagreeing reads with 'N'.
+#[inline]
+pub fn mend_consensus(a: u8, b: u8) -> u8 {
+    if a == b {
+        a
+    } else {
+        b'N'
+    }
+}
+
 /// Given two reads and the index of overlap, merge them together.
-fn merge(r1: &[u8], r2: &[u8], overlap: usize, mend: fn(u8, u8) -> u8) -> Vec<u8> {
-    let r1_end = r1.len() - overlap;
-    let r2_end = r2.len() - overlap;
-    let len = r1_end + overlap + r2_end;
+#[inline]
+pub fn merge(r1: &[u8], r2: &[u8], overlap: usize) -> Vec<u8> {
+    let len = overlap + r2.len();
 
     let mut seq = vec![0; len];
-    seq[0..r1_end].copy_from_slice(&r1[0..r1_end]);
+    seq[0..overlap].copy_from_slice(&r1[0..overlap]);
 
     // decide what to do for the overlapping part
-    for i in 0..overlap {
-        seq[r1_end + i] = mend(r1[r1_end + i], r2[i]);
+    for i in overlap..r1.len() {
+        seq[i] = mend_consensus(r1[i], r2[i - overlap]);
     }
-    seq[(r1_end + overlap)..len].copy_from_slice(&r2[overlap..r2.len()]);
+    seq[r1.len()..len].copy_from_slice(&r2[r1.len() - overlap..r2.len()]);
+    //println!("-----\n{}\n{}\n->\t{}\n\n{}", String::from_utf8_lossy(&r1), String::from_utf8_lossy(&r2), overlap, String::from_utf8_lossy(&seq));
     seq
 }
 
 /// Mend and return the overlapping region of two reads, given an index of overlap.
-fn truncate(r1: &[u8], r2: &[u8], overlap: usize, mend: fn(u8, u8) -> u8) -> Vec<u8> {
+#[inline]
+pub fn truncate(r1: &[u8], r2: &[u8], overlap: usize, mend: fn(u8, u8) -> u8) -> Vec<u8> {
     let r2_end = r2.len();
 
     let mut seq = vec![0; overlap];
@@ -103,32 +156,6 @@ fn truncate(r1: &[u8], r2: &[u8], overlap: usize, mend: fn(u8, u8) -> u8) -> Vec
         seq[(overlap - i) - 1] = mend(r1[(overlap - i) - 1], r2[(r2_end - i) - 1]);
     }
     seq
-}
-
-pub fn find_merge(r1: Record, r2: Record) -> Option<Record> {
-        let r2_rc = r2.rc();
-        let r1_rc = r1.rc();
-
-        match mate(r1.seq, &r2_rc, 25, 20) {
-            Some(overlap) => {
-                let seq = merge(r1.seq, &r2_rc, overlap, mend_consensus);
-            }
-            None => None,
-        }
-}
-
-pub fn merge_hint(r1: Record, r2: Record, hint: u8) -> Option<Record> {
-    let r2_rc = dna::revcomp(r2.seq);
-    let r1_rc = dna::revcomp(r1.seq);
-
-    match mate(r1.seq(), &r2_rc, 25, 20) {
-        Some(overlap) => {
-            let seq = merge(r1.seq(), &r2_rc, overlap, mend_consensus);
-            let qual = merge(r1.qual(), r2.qual(), overlap, cmp::max);
-            Some(Record::with_attrs(r1.id(), None, &seq, &qual))
-        }
-        None => None,
-    }
 }
 
 #[cfg(test)]
