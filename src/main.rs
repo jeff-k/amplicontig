@@ -2,6 +2,8 @@ extern crate clap;
 extern crate csv;
 extern crate flate2;
 //extern crate serde;
+mod aligner;
+mod mating;
 mod primerset;
 
 use flate2::read::MultiGzDecoder;
@@ -14,11 +16,12 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-mod mating;
+use aligner::Aligner;
+use aligner::Alignment::{Forward, Reverse};
 use mating::{mate, merge, rc};
 
+use bio_streams::fasta::Fasta;
 use bio_streams::fastq::Fastq;
-//use bio_streams::Record;
 
 use crate::primerset::{Primer, PrimerSet};
 use crate::Amplicon::{Discarded, Merged, Paired};
@@ -27,6 +30,7 @@ use crate::Orientation::{F1R2, F2R1, R1F2, R2F1};
 #[derive(Parser)]
 struct Cli {
     primers: PathBuf,
+    reference: PathBuf,
     r1: PathBuf,
     r2: PathBuf,
 }
@@ -115,6 +119,11 @@ fn main() {
         MultiGzDecoder::new(File::open(&args.r2).unwrap()),
     ));
 
+    let mut reference: Fasta<BufReader<File>> =
+        Fasta::new(BufReader::new(File::open(&args.reference).unwrap()));
+
+    let aligner = Aligner::new(&reference.next().unwrap().seq);
+
     let mut f1r2 = 0;
     let mut f2r1 = 0;
     let mut r1f2 = 0;
@@ -125,7 +134,11 @@ fn main() {
     for (r1, r2) in fq1.zip(fq2) {
         let amplicon = match (primers.get(&r1.seq), primers.get(&r2.seq)) {
             (Some(p1), Some(p2)) => merge_amplicon(p1, &r1.seq, p2, &r2.seq),
-            _ => Discarded,
+            _ => match (aligner.get(&r1.seq), aligner.get(&r2.seq)) {
+                (Forward(r1pos), Reverse(r2pos)) => Paired(F1R2, r1.seq, rc(&r2.seq)),
+                (Reverse(r1pos), Forward(r2pos)) => Paired(R1F2, rc(&r1.seq), r2.seq),
+                _ => Discarded,
+            },
         };
         match amplicon {
             Merged(orientation, seq) => {
