@@ -50,8 +50,8 @@ enum Orientation {
 
 enum Amplicon {
     Discarded,
-    Merged(Orientation, Vec<u8>),
-    Paired(Orientation, Vec<u8>, Vec<u8>),
+    Merged(Orientation, usize, Vec<u8>),
+    Paired(Orientation, usize, Vec<u8>, usize, Vec<u8>),
 }
 
 #[inline]
@@ -67,18 +67,22 @@ fn merge_amplicon(p1: &Primer, r1: &[u8], p2: &Primer, r2: &[u8]) -> Amplicon {
                 let r2rc = rc(r2);
                 if hint < r1.len() - 30 {
                     match mate(r1, &r2rc, hint, max_indel) {
-                        Some(seam) => Merged(F1R2, merge(r1, &r2rc, seam)),
-                        None => Discarded,
+                        Some(seam) => Merged(F1R2, p1.index, merge(r1, &r2rc, seam)),
+                        None => Paired(F1R2, p1.index, r1.to_vec(), p2.index, r2rc),
                     }
                 } else {
-                    Paired(F1R2, r1.to_vec(), r2rc)
+                    Paired(F1R2, p1.index, r1.to_vec(), p2.index, r2rc)
                 }
             } else if !p1.forward && p2.forward {
                 // R1F2
                 let r1rc = rc(r1);
-                match mate(&r1rc, r2, hint, max_indel) {
-                    Some(seam) => Merged(R1F2, merge(&r1rc, r2, seam)),
-                    None => Discarded,
+                if hint < r1.len() - 30 {
+                    match mate(&r1rc, r2, hint, max_indel) {
+                        Some(seam) => Merged(R1F2, p1.index, merge(&r1rc, r2, seam)),
+                        None => Paired(R1F2, p1.index, r1rc, p2.index, r2.to_vec()),
+                    }
+                } else {
+                    Paired(R1F2, p1.index, r1rc, p2.index, r2.to_vec())
                 }
             } else {
                 Discarded
@@ -89,15 +93,15 @@ fn merge_amplicon(p1: &Primer, r1: &[u8], p2: &Primer, r2: &[u8]) -> Amplicon {
                 // F2R1
                 let r1rc = rc(r1);
                 match mate(r2, &r1rc, hint, max_indel) {
-                    Some(seam) => Merged(F2R1, merge(r2, &r1rc, seam)),
-                    None => Discarded,
+                    Some(seam) => Merged(F2R1, p1.index, merge(r2, &r1rc, seam)),
+                    None => Paired(F2R1, p2.index, r2.to_vec(), p1.index, r1rc),
                 }
             } else if !p1.forward && p2.forward {
                 // R2F1
                 let r2rc = rc(r2);
                 match mate(&r2rc, r1, hint, max_indel) {
-                    Some(seam) => Merged(R2F1, merge(&r2rc, r1, seam)),
-                    None => Discarded,
+                    Some(seam) => Merged(R2F1, p1.index, merge(&r2rc, r1, seam)),
+                    None => Paired(R2F1, p2.index, r2rc, p1.index, r1.to_vec()),
                 }
             } else {
                 Discarded
@@ -129,19 +133,33 @@ fn main() {
     let mut r1f2 = 0;
     let mut r2f1 = 0;
 
+    let mut total = 0;
+    let mut merged = 0;
+    let mut mapped = 0;
+
     let mut bins: HashMap<Vec<u8>, Assembly> = HashMap::new();
 
     for (r1, r2) in fq1.zip(fq2) {
+        total += 1;
         let amplicon = match (primers.get(&r1.seq), primers.get(&r2.seq)) {
-            (Some(p1), Some(p2)) => merge_amplicon(p1, &r1.seq, p2, &r2.seq),
+            (Some(p1), Some(p2)) => {
+                merged += 1;
+                merge_amplicon(p1, &r1.seq, p2, &r2.seq)
+            }
             _ => match (aligner.get(&r1.seq), aligner.get(&r2.seq)) {
-                (Forward(r1pos), Reverse(r2pos)) => Paired(F1R2, r1.seq, rc(&r2.seq)),
-                (Reverse(r1pos), Forward(r2pos)) => Paired(R1F2, rc(&r1.seq), r2.seq),
+                (Forward(r1pos), Reverse(r2pos)) => {
+                    mapped += 1;
+                    Paired(F1R2, r1pos, r1.seq, r2pos, rc(&r2.seq))
+                }
+                (Reverse(r1pos), Forward(r2pos)) => {
+                    mapped += 1;
+                    Paired(R1F2, r1pos, rc(&r1.seq), r2pos, r2.seq)
+                }
                 _ => Discarded,
             },
         };
         match amplicon {
-            Merged(orientation, seq) => {
+            Merged(orientation, pos, seq) => {
                 match orientation {
                     F1R2 => f1r2 += 1,
                     F2R1 => f2r1 += 1,
@@ -151,12 +169,12 @@ fn main() {
                 bins.entry(seq)
                     .or_insert(Assembly {
                         count: 0,
-                        start: 0,
-                        end: 0,
+                        start: pos,
+                        end: pos,
                     })
                     .count += 1
             }
-            Paired(orientation, r1, r2) => {
+            Paired(orientation, start, r1, end, r2) => {
                 match orientation {
                     F1R2 => f1r2 += 1,
                     F2R1 => f2r1 += 1,
@@ -166,15 +184,15 @@ fn main() {
                 bins.entry(r1)
                     .or_insert(Assembly {
                         count: 0,
-                        start: 0,
-                        end: 0,
+                        start,
+                        end,
                     })
                     .count += 1;
                 bins.entry(r2)
                     .or_insert(Assembly {
                         count: 0,
-                        start: 0,
-                        end: 0,
+                        start,
+                        end,
                     })
                     .count += 1;
             }
@@ -196,7 +214,7 @@ fn main() {
         }
     }
     eprintln!(
-        "r1f2: {}\tf1r2: {}\tr2f1: {}\tf2r1: {}",
-        r1f2, f1r2, r2f1, f2r1
+        "r1f2: {}\tf1r2: {}\tr2f1: {}\tf2r1: {}\tmerged: {}\tmapped: {}\ttotal: {}",
+        r1f2, f1r2, r2f1, f2r1, merged, mapped, total
     );
 }

@@ -26,6 +26,8 @@ impl Aligner {
             if !seen.contains_key(window) {
                 forward.insert(window.to_vec(), index);
                 seen.insert(window.to_vec(), true);
+            } else {
+                forward.remove(window);
             }
         }
         let ref_rc = rc(reference);
@@ -33,8 +35,13 @@ impl Aligner {
             if !seen.contains_key(window) {
                 reverse.insert(window.to_vec(), ref_rc.len() - index);
                 seen.insert(window.to_vec(), true);
+            } else {
+                forward.remove(window);
+                reverse.remove(window);
             }
         }
+
+        //println!("{} forward, {} reverse", forward.len(), reverse.len());
         Aligner {
             k,
             forward,
