@@ -148,6 +148,7 @@ pub fn merge(r1: &[u8], r2: &[u8], overlap: usize) -> Vec<u8> {
 
 /// Mend and return the overlapping region of two reads, given an index of overlap.
 #[inline]
+#[allow(dead_code)]
 pub fn truncate(r1: &[u8], r2: &[u8], overlap: usize, mend: fn(u8, u8) -> u8) -> Vec<u8> {
     let r2_end = r2.len();
 

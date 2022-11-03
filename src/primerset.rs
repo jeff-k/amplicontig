@@ -4,7 +4,7 @@ use core::cmp::{max, min};
 use std::fs::File;
 use std::path::PathBuf;
 
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 
 use std::collections::HashMap;
 
@@ -18,6 +18,7 @@ pub struct Primer {
     //    length: u8,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct PrimerSet {
     name: String,
@@ -64,12 +65,12 @@ impl PrimerSet {
         }
         PrimerSet {
             name: "asdf".to_string(),
-            plen: plen,
-            forward: forward,
-            reverse: reverse,
+            plen,
+            forward,
+            reverse,
         }
     }
-    pub fn get(self: &Self, p: &[u8]) -> Option<&Primer> {
+    pub fn get(&self, p: &[u8]) -> Option<&Primer> {
         match self.forward.get(&p[..self.plen]) {
             Some(p) => Some(p),
             None => match self.reverse.get(&p[..self.plen]) {
@@ -80,6 +81,7 @@ impl PrimerSet {
     }
 }
 
+#[allow(dead_code)]
 pub struct Stats {
     pub on_target: u32,
     pub off_target: u32,
@@ -88,6 +90,7 @@ pub struct Stats {
     pub mated: u32,
 }
 
+#[allow(dead_code)]
 impl Stats {
     pub fn new() -> Self {
         Stats {
