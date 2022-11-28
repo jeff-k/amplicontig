@@ -1,6 +1,6 @@
 [package]
 name = "amplicontig"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["jeff-k <jeff_k@fastmail.com>"]
 edition = "2021"
 
@@ -11,3 +11,5 @@ clap = { version = "4", features = ["derive"] }
 flate2 = "1"
 csv = "1"
 serde = { version = "1", features = ["derive"] }
+gfa = "0.10"
+store-interval-tree = "0.3"

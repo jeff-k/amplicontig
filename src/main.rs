@@ -9,6 +9,7 @@ mod primerset;
 use flate2::read::MultiGzDecoder;
 
 use core::cmp::{max, min, Ordering};
+use core::ops::Bound::{Excluded, Included};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
@@ -27,6 +28,8 @@ use crate::primerset::{Primer, PrimerSet};
 use crate::Amplicon::{Discarded, Merged, Paired};
 use crate::Orientation::{F1R2, F2R1, R1F2, R2F1};
 
+use store_interval_tree::{Interval, IntervalTree, IntervalTreeIterator};
+
 #[derive(Parser)]
 struct Cli {
     primers: PathBuf,
@@ -35,8 +38,11 @@ struct Cli {
     r2: PathBuf,
 }
 
+#[derive(Debug)]
 struct Assembly {
     count: usize,
+    //fwds: usize,
+    //revs: usize,
     start: usize,
     end: usize,
 }
@@ -52,6 +58,48 @@ enum Amplicon {
     Discarded,
     Merged(Orientation, usize, Vec<u8>),
     Paired(Orientation, usize, Vec<u8>, usize, Vec<u8>),
+}
+
+fn fix(template: &mut Vec<u8>, q: &Vec<u8>) {
+    if template.len() != q.len() {
+        return;
+    }
+    for (a, b) in template.iter_mut().zip(q) {
+        if a != b {
+            if *a == b'N' {
+                *a = *b;
+            }
+        }
+    }
+}
+
+fn merge_bin(bin: &HashMap<Vec<u8>, Assembly>) -> HashMap<Vec<u8>, Assembly> {
+    let mut new = HashMap::new();
+    let mut template: Vec<u8> = Vec::new();
+    let mut assembly = Assembly {
+        count: 0,
+        start: 0,
+        end: 0,
+    };
+    let mut max = 0;
+
+    for (k, v) in bin {
+        if v.count > max {
+            max = v.count;
+            template = k.to_vec();
+            assembly.count = v.count;
+            assembly.start = v.start;
+            assembly.end = v.end;
+        }
+    }
+
+    for (k, v) in bin {
+        fix(&mut template, &k);
+        assembly.count += v.count;
+    }
+
+    new.insert(template, assembly);
+    new
 }
 
 #[inline]
@@ -138,6 +186,10 @@ fn main() {
     let mut mapped = 0;
 
     let mut bins: HashMap<Vec<u8>, Assembly> = HashMap::new();
+    let mut leftover: HashMap<Vec<u8>, usize> = HashMap::new();
+    //    let mut tree: IntervalTree<usize, Vec<u8>> = IntervalTree::new();
+    let mut tree: IntervalTree<usize, ()> = IntervalTree::new();
+    let mut ibins: HashMap<Interval<usize>, HashMap<Vec<u8>, Assembly>> = HashMap::new();
 
     for (r1, r2) in fq1.zip(fq2) {
         total += 1;
@@ -166,13 +218,27 @@ fn main() {
                     R1F2 => r1f2 += 1,
                     R2F1 => r2f1 += 1,
                 };
-                bins.entry(seq)
+                let len = pos + &seq.len();
+                let interval = Interval::new(Included(pos), Included(len));
+
+                tree.insert(interval.clone(), ());
+                ibins
+                    .entry(interval)
+                    .or_insert(HashMap::from([(
+                        seq.clone(),
+                        Assembly {
+                            count: 0,
+                            start: pos,
+                            end: len,
+                        },
+                    )]))
+                    .entry(seq)
                     .or_insert(Assembly {
                         count: 0,
                         start: pos,
-                        end: pos,
+                        end: len,
                     })
-                    .count += 1
+                    .count += 1;
             }
             Paired(orientation, start, r1, end, r2) => {
                 match orientation {
@@ -181,6 +247,8 @@ fn main() {
                     R1F2 => r1f2 += 1,
                     R2F1 => r2f1 += 1,
                 };
+
+                /*
                 bins.entry(r1)
                     .or_insert(Assembly {
                         count: 0,
@@ -195,22 +263,34 @@ fn main() {
                         end,
                     })
                     .count += 1;
+                    */
             }
             _ => (),
         }
     }
 
-    for (k, v) in bins {
-        if v.count > 10 {
-            println!(
-                ">{}-{},ref_length:{},count:{},lenth:{}\n{}",
-                v.start,
-                v.end,
-                v.end - v.start,
-                &v.count,
-                &k.len(),
-                String::from_utf8_lossy(&k[20..k.len() - 20]),
-            );
+    /*
+    println!(
+        "{:?}",
+        tree.intervals_between(&Interval::point(14), &Interval::point(29000))
+    );
+    */
+
+    for interval in tree.intervals() {
+        let bin = ibins.get(&interval).unwrap();
+
+        for (k, v) in merge_bin(bin) {
+            if v.count > 10 {
+                println!(
+                    ">{}-{},ref_length:{},count:{},lenth:{}\n{}",
+                    v.start,
+                    v.end,
+                    v.end - v.start,
+                    &v.count,
+                    &k.len(),
+                    String::from_utf8_lossy(&k[20..k.len() - 20]),
+                );
+            }
         }
     }
     eprintln!(

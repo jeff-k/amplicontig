@@ -58,4 +58,13 @@ impl Aligner {
             },
         }
     }
+
+    /*
+    pub fn align(&self, query: &[u8] ) -> Alignment {
+        for i in range(0..query.len()) {
+            let g1 = self.get(query);
+            let g2 = self.get(query);
+        }
+    }
+    */
 }
