@@ -174,7 +174,7 @@ fn main() {
     let mut reference: Fasta<BufReader<File>> =
         Fasta::new(BufReader::new(File::open(&args.reference).unwrap()));
 
-    let aligner = Aligner::new(&reference.next().unwrap().seq);
+    let aligner = Aligner::new(&reference.next().unwrap().unwrap().seq);
 
     let mut f1r2 = 0;
     let mut f2r1 = 0;
@@ -193,19 +193,19 @@ fn main() {
 
     for (r1, r2) in fq1.zip(fq2) {
         total += 1;
-        let amplicon = match (primers.get(&r1.seq), primers.get(&r2.seq)) {
+        let amplicon = match (primers.get(&r1.unwrap().seq), primers.get(&r2.unwrap().seq)) {
             (Some(p1), Some(p2)) => {
                 merged += 1;
-                merge_amplicon(p1, &r1.seq, p2, &r2.seq)
+                merge_amplicon(p1, &r1.unwrap().seq, p2, &r2.unwrap().seq)
             }
-            _ => match (aligner.get(&r1.seq), aligner.get(&r2.seq)) {
+            _ => match (aligner.get(&r1.unwrap().seq), aligner.get(&r2.unwrap().seq)) {
                 (Forward(r1pos), Reverse(r2pos)) => {
                     mapped += 1;
-                    Paired(F1R2, r1pos, r1.seq, r2pos, rc(&r2.seq))
+                    Paired(F1R2, r1pos, r1.seq, r2pos, rc(&r2.unwrap().seq))
                 }
                 (Reverse(r1pos), Forward(r2pos)) => {
                     mapped += 1;
-                    Paired(R1F2, r1pos, rc(&r1.seq), r2pos, r2.seq)
+                    Paired(R1F2, r1pos, rc(&r1.unwrap().seq), r2pos, r2.unwrap().seq)
                 }
                 _ => Discarded,
             },

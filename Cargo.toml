@@ -1,15 +1,15 @@
 [package]
 name = "amplicontig"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["jeff-k <jeff_k@fastmail.com>"]
 edition = "2021"
 
 [dependencies]
-bio-seq = "0.8"
-bio-streams = { git="https://github.com/jeff-k/bio-streams.git" }
+bio-seq = { path = "../bio-seq/bio-seq" }
+bio-streams ={ path = "../bio-streams" }
 clap = { version = "4", features = ["derive"] }
 flate2 = "1"
 csv = "1"
 serde = { version = "1", features = ["derive"] }
-gfa = "0.10"
-store-interval-tree = "0.3"
+store-interval-tree = "0.4"
+cbgb = { path = "../cbgb" }
