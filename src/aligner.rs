@@ -1,5 +1,5 @@
-use crate::mating::rc;
-use std::collections::HashMap;
+use bio_seq::prelude::*;
+use std::collections::{HashMap, HashSet};
 
 use crate::aligner::Alignment::{Forward, Reverse, Unmapped};
 
@@ -11,37 +11,36 @@ pub enum Alignment {
 
 pub struct Aligner {
     k: usize,
-    forward: HashMap<Vec<u8>, usize>,
-    reverse: HashMap<Vec<u8>, usize>,
+    forward: HashMap<Seq<Dna>, usize>,
+    reverse: HashMap<Seq<Dna>, usize>,
 }
 
 impl Aligner {
-    pub fn new(reference: &[u8]) -> Self {
+    pub fn new(reference: &SeqSlice<Dna>) -> Self {
         let k = 21;
         let mut forward = HashMap::new();
         let mut reverse = HashMap::new();
-        let mut seen: HashMap<Vec<u8>, bool> = HashMap::new();
+        let mut seen: HashSet<Seq<Dna>> = HashSet::new();
 
         for (index, window) in reference.windows(k).enumerate() {
-            if !seen.contains_key(window) {
-                forward.insert(window.to_vec(), index);
-                seen.insert(window.to_vec(), true);
+            if !seen.contains(window) {
+                forward.insert(window.into(), index);
+                seen.insert(window.into());
             } else {
                 forward.remove(window);
             }
         }
-        let ref_rc = rc(reference);
-        for (index, window) in ref_rc.windows(k).enumerate() {
-            if !seen.contains_key(window) {
-                reverse.insert(window.to_vec(), ref_rc.len() - index);
-                seen.insert(window.to_vec(), true);
+        for (index, window) in reference.revcomp().windows(k).enumerate() {
+            if !seen.contains(window) {
+                reverse.insert(window.into(), reference.len() - index);
+                seen.insert(window.into());
             } else {
                 forward.remove(window);
                 reverse.remove(window);
             }
         }
 
-        //println!("{} forward, {} reverse", forward.len(), reverse.len());
+        println!("{} forward, {} reverse", forward.len(), reverse.len());
         Aligner {
             k,
             forward,
@@ -49,7 +48,7 @@ impl Aligner {
         }
     }
 
-    pub fn get(&self, query: &[u8]) -> Alignment {
+    pub fn get(&self, query: &SeqSlice<Dna>) -> Alignment {
         match self.forward.get(&query[0..self.k]) {
             Some(pos) => Forward(*pos),
             None => match self.reverse.get(&query[0..self.k]) {

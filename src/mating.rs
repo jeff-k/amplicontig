@@ -22,28 +22,12 @@
 //! minimum overlap score and minimum overlap length could be guessed
 //! from the k-mer distribution. 25bp is the apparent standard.
 
+use bio_seq::prelude::*;
 use std::cmp;
-
-#[inline]
-pub fn rc(seq: &[u8]) -> Vec<u8> {
-    let mut rev: Vec<u8> = vec![];
-
-    for b in seq.iter().rev() {
-        rev.push(match b {
-            b'A' => b'T',
-            b'C' => b'G',
-            b'G' => b'C',
-            b'T' => b'A',
-            b'N' => b'N',
-            _ => panic!(),
-        });
-    }
-    rev
-}
 
 /// Determine the index of overlap for two reads.
 #[inline]
-pub fn mate(r1: &[u8], r2: &[u8], hint: usize, indel: usize) -> Option<usize> {
+pub fn mate(r1: &SeqSlice<Dna>, r2: &SeqSlice<Dna>, hint: usize, indel: usize) -> Option<usize> {
     let x = (r1.len() - hint) * 2;
     if x >= r1.len() {
         return None;
@@ -81,8 +65,8 @@ pub fn mate(r1: &[u8], r2: &[u8], hint: usize, indel: usize) -> Option<usize> {
 /// Mating with the Hamming rate objective function. Complexity: O(n^2).
 #[allow(dead_code)]
 pub fn mate_hamming_rate(
-    r1: &[u8],
-    r2: &[u8],
+    r1: &SeqSlice<Dna>,
+    r2: &SeqSlice<Dna>,
     overlap_bound: usize,
     min_score: i16,
 ) -> Option<usize> {
@@ -106,7 +90,7 @@ pub fn mate_hamming_rate(
 
 /// Mating objective function that penalizes mismatches.
 #[inline]
-fn score(r1: &[u8], r2: &[u8]) -> i16 {
+fn score(r1: &SeqSlice<Dna>, r2: &SeqSlice<Dna>) -> i16 {
     let mut s: i16 = 0;
     let len = r1.len();
     for i in 0..len {
@@ -120,6 +104,7 @@ fn score(r1: &[u8], r2: &[u8]) -> i16 {
 }
 
 /// Function that replaces disagreeing reads with 'N'.
+/*
 #[inline]
 pub fn mend_consensus(a: u8, b: u8) -> u8 {
     if a == b {
@@ -128,36 +113,49 @@ pub fn mend_consensus(a: u8, b: u8) -> u8 {
         b'N'
     }
 }
+*/
 
 /// Given two reads and the index of overlap, merge them together.
 #[inline]
-pub fn merge(r1: &[u8], r2: &[u8], overlap: usize) -> Vec<u8> {
-    let len = overlap + r2.len();
+pub fn merge(r1: &SeqSlice<Dna>, r2: &SeqSlice<Dna>, overlap: usize) -> Seq<Dna> {
+    //let len = overlap + r2.len();
 
-    let mut seq = vec![0; len];
-    seq[0..overlap].copy_from_slice(&r1[0..overlap]);
+    //let mut seq: Vec<Dna> = vec![Dna::A; len];
+    //seq[0..overlap].copy_from_slice(&r1[0..overlap]);
 
-    // decide what to do for the overlapping part
-    for i in overlap..r1.len() {
-        seq[i] = mend_consensus(r1[i], r2[i - overlap]);
-    }
-    seq[r1.len()..len].copy_from_slice(&r2[r1.len() - overlap..r2.len()]);
+    //let mut seq: Seq<Dna> = Seq::new();
+    // decide what to do for the overlapping par
+
+    r1.into_iter()
+        .chain(&r2[r1.len() - overlap..r2.len()])
+        .collect()
+    //for i in overlap..r1.len() {
+    //        seq[i] = mend_consensus(r1[i], r2[i - overlap]);
+    //    seq[i] = r1[i];
+    //}
+    //seq[r1.len()..len].copy_from_slice(&r2[r1.len() - overlap..r2.len()]);
     //println!("-----\n{}\n{}\n->\t{}\n\n{}", String::from_utf8_lossy(&r1), String::from_utf8_lossy(&r2), overlap, String::from_utf8_lossy(&seq));
-    seq
 }
 
 /// Mend and return the overlapping region of two reads, given an index of overlap.
+/*
 #[inline]
 #[allow(dead_code)]
-pub fn truncate(r1: &[u8], r2: &[u8], overlap: usize, mend: fn(u8, u8) -> u8) -> Vec<u8> {
+pub fn truncate(
+    r1: &SeqSlice<Dna>,
+    r2: &SeqSlice<Dna>,
+    overlap: usize,
+    mend: fn(&SeqSlice<Dna>, &SeqSlice<Dna>) -> Dna,
+) -> Seq<Dna> {
     let r2_end = r2.len();
 
-    let mut seq = vec![0; overlap];
+    let mut seq: Vec<Dna> = vec![Dna::A; overlap];
     for i in 0..overlap {
-        seq[(overlap - i) - 1] = mend(r1[(overlap - i) - 1], r2[(r2_end - i) - 1]);
+        seq[(overlap - i) - 1] = mend(r1.get((overlap - i) - 1), r2.get((r2_end - i) - 1));
     }
-    seq
+    Seq::from(&seq)
 }
+*/
 
 #[cfg(test)]
 mod tests {

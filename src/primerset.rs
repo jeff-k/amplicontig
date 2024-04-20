@@ -1,5 +1,3 @@
-extern crate csv;
-
 use core::cmp::{max, min};
 use std::fs::File;
 use std::path::PathBuf;
@@ -7,6 +5,8 @@ use std::path::PathBuf;
 use serde::Deserialize;
 
 use std::collections::HashMap;
+
+use bio_seq::prelude::*;
 
 #[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct Primer {
@@ -23,8 +23,8 @@ pub struct Primer {
 pub struct PrimerSet {
     name: String,
     plen: usize,
-    forward: HashMap<Vec<u8>, Primer>,
-    reverse: HashMap<Vec<u8>, Primer>,
+    forward: HashMap<Seq<Dna>, Primer>,
+    reverse: HashMap<Seq<Dna>, Primer>,
 }
 
 impl PrimerSet {
@@ -58,9 +58,9 @@ impl PrimerSet {
 
         for primer in primers {
             if primer.forward {
-                forward.insert(primer.seq[..plen].into(), primer.clone());
+                forward.insert(primer.seq[..plen].try_into().unwrap(), primer.clone());
             } else {
-                reverse.insert(primer.seq[..plen].into(), primer.clone());
+                reverse.insert(primer.seq[..plen].try_into().unwrap(), primer.clone());
             }
         }
         PrimerSet {
@@ -70,7 +70,7 @@ impl PrimerSet {
             reverse,
         }
     }
-    pub fn get(&self, p: &[u8]) -> Option<&Primer> {
+    pub fn get(&self, p: &SeqSlice<Dna>) -> Option<&Primer> {
         match self.forward.get(&p[..self.plen]) {
             Some(p) => Some(p),
             None => match self.reverse.get(&p[..self.plen]) {
