@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-use aligner::edit_dist;
+use aligner::{edit_dist, pp};
 
 use bio_streams::fasta::Fasta;
 use bio_streams::fastq::Fastq;
@@ -90,7 +90,7 @@ fn main() {
     let mut reference: Fasta<BufReader<File>> =
         Fasta::new(BufReader::new(File::open(&args.reference).unwrap()));
 
-    //    let aligner = Aligner::new(&reference.next().unwrap().unwrap().seq);
+    let ref_seq: Seq<Dna> = reference.next().unwrap().unwrap().seq; //    let aligner = Aligner::new(&reference.next().unwrap().unwrap().seq);
 
     let mut f1r2 = 0;
     let mut f2r1 = 0;
@@ -153,12 +153,14 @@ fn main() {
                             .count += 1;
                     }
                     Paired(orientation, _start, _end) => {
+                        /*
                         match orientation {
                             F1R2 => f1r2 += 1,
                             F2R1 => f2r1 += 1,
                             R1F2 => r1f2 += 1,
                             R2F1 => r2f1 += 1,
                         };
+                        */
                     }
                     _ => (),
                 }
@@ -181,7 +183,15 @@ fn main() {
         let bin = ibins.get(&interval).unwrap();
 
         for (k, v) in merge_bin(bin) {
+            if v.end - v.start > 400 || k.len() > 400 {
+                continue;
+            }
+            let ref_seg: &SeqSlice<Dna> = &ref_seq[v.start..v.end];
             if v.count > 10 {
+                let (score, ops) = edit_dist(&ref_seg.to_string(), &k.to_string());
+                if score > 0 {
+                    println!("\n\nDISTANCE:\n{}\n{}\n{}\n\n", &ref_seg, pp(&ops), &k);
+                }
                 println!(
                     ">{}-{},ref_length:{},count:{},lenth:{}\n{}",
                     v.start,

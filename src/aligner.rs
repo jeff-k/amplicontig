@@ -1,5 +1,8 @@
 use bio_seq::prelude::*;
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    str::MatchIndices,
+};
 
 use crate::aligner::Alignment::{Forward, Reverse, Unmapped};
 
@@ -13,6 +16,20 @@ pub struct Aligner {
     k: usize,
     forward: HashMap<Seq<Dna>, usize>,
     reverse: HashMap<Seq<Dna>, usize>,
+}
+
+pub fn pp(ops: &Vec<Cigar>) -> String {
+    let mut s = String::new();
+
+    for op in ops {
+        s.push(match op {
+            Cigar::Match => ' ',
+            Cigar::Subs => '|',
+            _ => '*',
+        })
+    }
+
+    s
 }
 
 impl Aligner {
