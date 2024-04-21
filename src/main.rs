@@ -1,4 +1,4 @@
-//mod aligner;
+mod aligner;
 mod mating;
 mod primerset;
 
@@ -13,7 +13,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 
-//use aligner::Aligner;
+use aligner::edit_dist;
 
 use bio_streams::fasta::Fasta;
 use bio_streams::fastq::Fastq;
@@ -87,8 +87,8 @@ fn main() {
         MultiGzDecoder::new(File::open(&args.r2).unwrap()),
     ));
 
-    //    let mut reference: Fasta<BufReader<File>> =
-    //        Fasta::new(BufReader::new(File::open(&args.reference).unwrap()));
+    let mut reference: Fasta<BufReader<File>> =
+        Fasta::new(BufReader::new(File::open(&args.reference).unwrap()));
 
     //    let aligner = Aligner::new(&reference.next().unwrap().unwrap().seq);
 
@@ -100,9 +100,6 @@ fn main() {
     let mut total = 0;
     let mut merged = 0;
     let mut mapped = 0;
-
-    let mut primer_matches = 0;
-    let mut invalid_primers = 0;
 
     let mut invalid_reads = 0;
 
@@ -199,7 +196,7 @@ fn main() {
         }
     }
     eprintln!(
-        "r1f2: {}\tf1r2: {}\tr2f1: {}\tf2r1: {}\tmerged: {}\tmapped: {}\ttotal: {}\tinvalid: {}\tprimer matches: {}\tinvalid primer matches: {}",
-        r1f2, f1r2, r2f1, f2r1, merged, mapped, total, invalid_reads, primer_matches, invalid_primers
+        "r1f2: {}\tf1r2: {}\tr2f1: {}\tf2r1: {}\tmerged: {}\ttotal: {}\tinvalid: {}",
+        r1f2, f1r2, r2f1, f2r1, merged, total, invalid_reads
     );
 }

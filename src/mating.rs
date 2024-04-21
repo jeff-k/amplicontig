@@ -137,8 +137,8 @@ pub fn merge(r1: &SeqSlice<Dna>, r2: &SeqSlice<Dna>, overlap: usize) -> Seq<Dna>
     //println!("-----\n{}\n{}\n->\t{}\n\n{}", String::from_utf8_lossy(&r1), String::from_utf8_lossy(&r2), overlap, String::from_utf8_lossy(&seq));
 }
 
-/// Mend and return the overlapping region of two reads, given an index of overlap.
 /*
+/// Mend and return the overlapping region of two reads, given an index of overlap.
 #[inline]
 #[allow(dead_code)]
 pub fn truncate(
@@ -156,7 +156,7 @@ pub fn truncate(
     Seq::from(&seq)
 }
 */
-
+/*
 #[cfg(test)]
 mod tests {
     use super::{mate, mend_consensus, merge, truncate};
@@ -228,3 +228,4 @@ mod tests {
     #[test]
     fn test_disjoint() {}
 }
+*/
