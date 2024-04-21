@@ -1,4 +1,4 @@
-use core::cmp::{max, min};
+use core::cmp::{max, min, Eq};
 use std::fs::File;
 use std::path::PathBuf;
 
@@ -8,17 +8,16 @@ use std::collections::HashMap;
 
 use bio_seq::prelude::*;
 
-#[derive(Debug, Deserialize, Clone, PartialEq)]
+#[derive(Debug, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub struct Primer {
     pub name: String,
     pub forward: bool,
-    pub seq: String, //Vec<u8>,
+    pub seq: String,
     //    left: bool,
     pub index: usize,
     //    length: u8,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct PrimerSet {
     name: String,

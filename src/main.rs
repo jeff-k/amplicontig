@@ -187,97 +187,106 @@ fn main() {
     let mut merged = 0;
     let mut mapped = 0;
 
-    //    let mut bins: HashMap<Seq<Dna>, Assembly> = HashMap::new();
+    let mut invalid_reads = 0;
+
+    //let mut bins: HashMap<Seq<Dna>, Assembly> = HashMap::new();
+    let mut bins: HashMap<(String, String), usize> = HashMap::new();
     //    let mut leftover: HashMap<Seq<Dna>, usize> = HashMap::new();
     //    let mut tree: IntervalTree<usize, Vec<u8>> = IntervalTree::new();
     let mut tree: IntervalTree<usize, ()> = IntervalTree::new();
     let mut ibins: HashMap<Interval<usize>, HashMap<Seq<Dna>, Assembly>> = HashMap::new();
 
     for (r1, r2) in fq1.zip(fq2) {
-        let (r1, r2) = (r1.unwrap(), r2.unwrap());
-        total += 1;
-        let amplicon = match (primers.get(&r1.seq), primers.get(&r2.seq)) {
-            (Some(p1), Some(p2)) => {
-                merged += 1;
-                merge_amplicon(p1, &r1.seq, p2, &r2.seq)
+        match (r1, r2) {
+            (Err(_e), _) | (_, Err(_e)) => {
+                //println!("invalid sequence: {:?}", e);
+                invalid_reads += 1;
+                continue;
             }
-            _ => match (aligner.get(&r1.seq), aligner.get(&r2.seq)) {
-                (Forward(r1pos), Reverse(r2pos)) => {
-                    mapped += 1;
-                    Paired(F1R2, r1pos, r1.seq, r2pos, r2.seq.revcomp())
-                }
-                (Reverse(r1pos), Forward(r2pos)) => {
-                    mapped += 1;
-                    Paired(R1F2, r1pos, r1.seq.revcomp(), r2pos, r2.seq)
-                }
-                _ => Discarded,
-            },
-        };
-        match amplicon {
-            Merged(orientation, pos, seq) => {
-                match orientation {
-                    F1R2 => f1r2 += 1,
-                    F2R1 => f2r1 += 1,
-                    R1F2 => r1f2 += 1,
-                    R2F1 => r2f1 += 1,
-                };
-                let len = pos + seq.len();
-                let interval = Interval::new(Included(pos), Included(len));
+            (Ok(r1), Ok(r2)) => {
+                total += 1;
+                let amplicon = match (primers.get(&r1.seq), primers.get(&r2.seq)) {
+                    (Some(p1), Some(p2)) => {
+                        merged += 1;
+                        match (p1.forward, p2.forward) {
+                            (true, false) => {
+                                *bins.entry((p1.name.clone(), p2.name.clone())).or_insert(1) += 1;
+                                merge_amplicon(p1, &r1.seq, p2, &r2.seq)
+                            }
+                            (false, true) => {
+                                *bins.entry((p2.name.clone(), p1.name.clone())).or_insert(1) += 1;
+                                merge_amplicon(p1, &r1.seq, p2, &r2.seq)
+                            }
+                            _ => Amplicon::Discarded,
+                        }
+                    }
+                    _ => match (aligner.get(&r1.seq), aligner.get(&r2.seq)) {
+                        (Forward(r1pos), Reverse(r2pos)) => {
+                            mapped += 1;
 
-                tree.insert(interval.clone(), ());
-                ibins
-                    .entry(interval)
-                    .or_insert(HashMap::from([(
-                        seq.clone(),
-                        Assembly {
-                            count: 0,
-                            start: pos,
-                            end: len,
-                        },
-                    )]))
-                    .entry(seq)
-                    .or_insert(Assembly {
-                        count: 0,
-                        start: pos,
-                        end: len,
-                    })
-                    .count += 1;
-            }
-            Paired(orientation, _start, _r1, _end, _r2) => {
-                match orientation {
-                    F1R2 => f1r2 += 1,
-                    F2R1 => f2r1 += 1,
-                    R1F2 => r1f2 += 1,
-                    R2F1 => r2f1 += 1,
+                            Paired(F1R2, r1pos, r1.seq, r2pos, r2.seq.revcomp())
+                        }
+                        (Reverse(r1pos), Forward(r2pos)) => {
+                            mapped += 1;
+                            Paired(R1F2, r1pos, r1.seq.revcomp(), r2pos, r2.seq)
+                        }
+                        _ => Discarded,
+                    },
                 };
+                match amplicon {
+                    Merged(orientation, pos, seq) => {
+                        match orientation {
+                            F1R2 => f1r2 += 1,
+                            F2R1 => f2r1 += 1,
+                            R1F2 => r1f2 += 1,
+                            R2F1 => r2f1 += 1,
+                        };
+                        let len = pos + seq.len();
+                        let interval = Interval::new(Included(pos), Included(len));
 
-                /*
-                bins.entry(r1)
-                    .or_insert(Assembly {
-                        count: 0,
-                        start,
-                        end,
-                    })
-                    .count += 1;
-                bins.entry(r2)
-                    .or_insert(Assembly {
-                        count: 0,
-                        start,
-                        end,
-                    })
-                    .count += 1;
-                    */
+                        tree.insert(interval.clone(), ());
+                        ibins
+                            .entry(interval)
+                            .or_insert(HashMap::from([(
+                                seq.clone(),
+                                Assembly {
+                                    count: 0,
+                                    start: pos,
+                                    end: len,
+                                },
+                            )]))
+                            .entry(seq)
+                            .or_insert(Assembly {
+                                count: 0,
+                                start: pos,
+                                end: len,
+                            })
+                            .count += 1;
+                    }
+                    Paired(orientation, _start, _r1, _end, _r2) => {
+                        match orientation {
+                            F1R2 => f1r2 += 1,
+                            F2R1 => f2r1 += 1,
+                            R1F2 => r1f2 += 1,
+                            R2F1 => r2f1 += 1,
+                        };
+                    }
+                    _ => (),
+                }
             }
-            _ => (),
         }
     }
 
-    /*
     println!(
         "{:?}",
         tree.intervals_between(&Interval::point(14), &Interval::point(29000))
     );
-    */
+
+    for (k, v) in bins {
+        if v > 100 {
+            println!("{:?}: {}", k, v);
+        }
+    }
 
     for interval in tree.intervals() {
         let bin = ibins.get(&interval).unwrap();
@@ -298,7 +307,7 @@ fn main() {
         }
     }
     eprintln!(
-        "r1f2: {}\tf1r2: {}\tr2f1: {}\tf2r1: {}\tmerged: {}\tmapped: {}\ttotal: {}",
-        r1f2, f1r2, r2f1, f2r1, merged, mapped, total
+        "r1f2: {}\tf1r2: {}\tr2f1: {}\tf2r1: {}\tmerged: {}\tmapped: {}\ttotal: {}\tinvalid: {}",
+        r1f2, f1r2, r2f1, f2r1, merged, mapped, total, invalid_reads,
     );
 }

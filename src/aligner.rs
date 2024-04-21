@@ -52,7 +52,11 @@ impl Aligner {
         match self.forward.get(&query[0..self.k]) {
             Some(pos) => Forward(*pos),
             None => match self.reverse.get(&query[0..self.k]) {
-                Some(pos) => Reverse(*pos - query.len()),
+                Some(pos) => {
+                    //println!("{} {}", pos, query.len());
+                    //Reverse(*pos - query.len())
+                    Reverse(*pos)
+                }
                 None => Unmapped,
             },
         }
