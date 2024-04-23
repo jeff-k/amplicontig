@@ -1,7 +1,3 @@
-mod aligner;
-mod mating;
-mod primerset;
-
 use flate2::read::MultiGzDecoder;
 
 //use core::ops::Bound::{Excluded, Included};
@@ -12,21 +8,20 @@ use std::io::BufReader;
 use std::path::PathBuf;
 
 use clap::Parser;
+use store_interval_tree::{Interval, IntervalTree}; //, IntervalTreeIterator};
 
-use aligner::{edit_dist, pp};
+use ampliconlib::aligner::{edit_dist, merge_bin, pp, Assembly};
 
 use bio_streams::fasta::Fasta;
 use bio_streams::fastq::Fastq;
 
 use bio_seq::prelude::*;
 
-use crate::primerset::{
-    Amplicon::{Discarded, Merged, Paired},
+use ampliconlib::primerset::{
+    Amplicon::{Merged, Paired},
     Orientation::{F1R2, F2R1, R1F2, R2F1},
-    Primer, PrimerSet,
+    PrimerSet,
 };
-
-use store_interval_tree::{Interval, IntervalTree}; //, IntervalTreeIterator};
 
 #[derive(Parser)]
 struct Cli {
@@ -34,44 +29,6 @@ struct Cli {
     reference: PathBuf,
     r1: PathBuf,
     r2: PathBuf,
-}
-
-#[derive(Debug)]
-struct Assembly {
-    count: usize,
-    //fwds: usize,
-    //revs: usize,
-    start: usize,
-    end: usize,
-}
-fn merge_bin(bin: &HashMap<Seq<Dna>, Assembly>) -> HashMap<Seq<Dna>, Assembly> {
-    let mut new = HashMap::new();
-    let mut template: Seq<Dna> = Seq::new();
-    let mut assembly = Assembly {
-        count: 0,
-        start: 0,
-        end: 0,
-    };
-    let mut max = 0;
-
-    for (k, v) in bin {
-        if v.count > max {
-            max = v.count;
-            template = k.clone();
-            assembly.count = v.count;
-            assembly.start = v.start;
-            assembly.end = v.end;
-        }
-    }
-
-    for v in bin.values() {
-        // Find majority allele?
-        //fix(&mut template, &k);
-        assembly.count += v.count;
-    }
-
-    new.insert(template, assembly);
-    new
 }
 
 fn main() {
@@ -99,12 +56,12 @@ fn main() {
 
     let mut total = 0;
     let mut merged = 0;
-    let mut mapped = 0;
+    let mut _mapped = 0;
 
     let mut invalid_reads = 0;
 
     //let mut bins: HashMap<Seq<Dna>, Assembly> = HashMap::new();
-    let mut bins: HashMap<(String, String), usize> = HashMap::new();
+    let bins: HashMap<(String, String), usize> = HashMap::new();
     //    let mut leftover: HashMap<Seq<Dna>, usize> = HashMap::new();
     //    let mut tree: IntervalTree<usize, Vec<u8>> = IntervalTree::new();
     let mut tree: IntervalTree<usize, ()> = IntervalTree::new();
@@ -152,7 +109,7 @@ fn main() {
                             })
                             .count += 1;
                     }
-                    Paired(orientation, _start, _end) => {
+                    Paired(_orientation, _start, _end) => {
                         /*
                         match orientation {
                             F1R2 => f1r2 += 1,

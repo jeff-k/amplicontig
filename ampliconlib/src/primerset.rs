@@ -161,24 +161,11 @@ impl PrimerSet {
     }
 }
 
-#[allow(dead_code)]
+#[derive(Default)]
 pub struct Stats {
     pub on_target: u32,
     pub off_target: u32,
     pub total_pairs: u32,
     pub matched: u32,
     pub mated: u32,
-}
-
-#[allow(dead_code)]
-impl Stats {
-    pub fn new() -> Self {
-        Stats {
-            on_target: 0,
-            off_target: 0,
-            total_pairs: 0,
-            matched: 0,
-            mated: 0,
-        }
-    }
 }

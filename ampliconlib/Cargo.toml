@@ -1,0 +1,15 @@
+[package]
+name = "ampliconlib"
+version = "0.8.0"
+authors = ["jeff-k <jeff_k@fastmail.com>"]
+edition = "2021"
+
+[dependencies]
+bio-seq = { path = "../../bio-seq/bio-seq" }
+bio-streams ={ path = "../../bio-streams" }
+clap = { version = "4", features = ["derive"] }
+flate2 = "1"
+csv = "1"
+serde = { version = "1", features = ["derive"] }
+store-interval-tree = "0.4"
+cbgb = { path = "../../cbgb" }

@@ -1,8 +1,5 @@
 use bio_seq::prelude::*;
-use std::{
-    collections::{HashMap, HashSet},
-    str::MatchIndices,
-};
+use std::collections::{HashMap, HashSet};
 
 use crate::aligner::Alignment::{Forward, Reverse, Unmapped};
 
@@ -142,6 +139,44 @@ pub fn edit_dist(a: &str, b: &str) -> (usize, Vec<Cigar>) {
     (dp[a_len][b_len], ops[a_len][b_len].clone())
 }
 
+#[derive(Debug)]
+pub struct Assembly {
+    pub count: usize,
+    //fwds: usize,
+    //revs: usize,
+    pub start: usize,
+    pub end: usize,
+}
+
+pub fn merge_bin(bin: &HashMap<Seq<Dna>, Assembly>) -> HashMap<Seq<Dna>, Assembly> {
+    let mut new = HashMap::new();
+    let mut template: Seq<Dna> = Seq::new();
+    let mut assembly = Assembly {
+        count: 0,
+        start: 0,
+        end: 0,
+    };
+    let mut max = 0;
+
+    for (k, v) in bin {
+        if v.count > max {
+            max = v.count;
+            template = k.clone();
+            assembly.count = v.count;
+            assembly.start = v.start;
+            assembly.end = v.end;
+        }
+    }
+
+    for v in bin.values() {
+        // Find majority allele?
+        //fix(&mut template, &k);
+        assembly.count += v.count;
+    }
+
+    new.insert(template, assembly);
+    new
+}
 #[cfg(test)]
 mod tests {
     use super::{edit_dist, Cigar};

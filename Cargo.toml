@@ -1,10 +1,12 @@
 [package]
 name = "amplicontig"
-version = "0.8.0"
-authors = ["jeff-k <jeff_k@fastmail.com>"]
+version = "0.1.0"
 edition = "2021"
 
+[workspace]
+
 [dependencies]
+ampliconlib = { path = "ampliconlib" }
 bio-seq = { path = "../bio-seq/bio-seq" }
 bio-streams ={ path = "../bio-streams" }
 clap = { version = "4", features = ["derive"] }
