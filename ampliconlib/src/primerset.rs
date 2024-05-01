@@ -1,5 +1,6 @@
 use core::cmp::{max, min, Eq, Ordering};
 use std::fs::File;
+// use std::io;
 use std::path::PathBuf;
 
 use serde::Deserialize;
@@ -9,6 +10,7 @@ use std::collections::HashMap;
 use crate::mating::{mate, merge};
 use bio_seq::prelude::*;
 
+#[derive(Debug, PartialEq)]
 pub enum Orientation {
     F1R2,
     F2R1,
@@ -18,6 +20,7 @@ pub enum Orientation {
 
 use Orientation::{F1R2, F2R1, R1F2, R2F1};
 
+#[derive(Debug, PartialEq)]
 pub enum Amplicon {
     Discarded,
     Merged(Orientation, usize, usize, Seq<Dna>),
@@ -39,8 +42,8 @@ pub struct Primer {
 #[derive(Debug, Clone)]
 pub struct PrimerSet {
     plen: usize,
-    forward: HashMap<Seq<Dna>, Primer>,
-    reverse: HashMap<Seq<Dna>, Primer>,
+    pub forward: HashMap<Seq<Dna>, Primer>,
+    pub reverse: HashMap<Seq<Dna>, Primer>,
 }
 
 #[inline]
@@ -103,7 +106,12 @@ fn merge_amplicon(p1: &Primer, r1: &SeqSlice<Dna>, p2: &Primer, r2: &SeqSlice<Dn
 
 impl PrimerSet {
     pub fn from_csv(src: &PathBuf) -> PrimerSet {
-        let mut rdr = csv::Reader::from_reader(File::open(src).unwrap());
+        PrimerSet::from_reader(File::open(src).unwrap())
+    }
+
+    pub fn from_reader<R: std::io::Read>(src: R) -> PrimerSet {
+        let mut rdr = csv::Reader::from_reader(src);
+
         let mut forward = HashMap::new();
         let mut reverse = HashMap::new();
         let mut pmax = 0;
