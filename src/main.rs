@@ -33,7 +33,6 @@ struct Cli {
 
 fn main() {
     let args = Cli::parse();
-    let primers = PrimerSet::from_csv(&args.primers);
 
     //    let mut stats = Stats::new();
 
@@ -49,6 +48,7 @@ fn main() {
 
     let ref_seq: Seq<Dna> = reference.next().unwrap().unwrap().seq; //    let aligner = Aligner::new(&reference.next().unwrap().unwrap().seq);
 
+    let primers = PrimerSet::from_csv(&args.primers, Some(&ref_seq));
     let mut f1r2 = 0;
     let mut f2r1 = 0;
     let mut r1f2 = 0;
@@ -77,10 +77,13 @@ fn main() {
             (Ok(r1), Ok(r2)) => {
                 total += 1;
                 if total > 1000 {
+                    println!("ending early");
                     break;
                 }
                 match primers.get_amplicon(&r1.seq, &r2.seq) {
-                    Merged(orientation, start, end, seq) => {
+                    Merged(orientation, p1, p2, seq) => {
+                        let start = p1.index;
+                        let end = p2.index;
                         merged += 1;
                         match orientation {
                             F1R2 => f1r2 += 1,
@@ -144,7 +147,7 @@ fn main() {
                 continue;
             }
             let ref_seg: &SeqSlice<Dna> = &ref_seq[v.start..v.end];
-            if v.count > 10 {
+            if v.count > 5 {
                 let (score, ops) = edit_dist(&ref_seg.to_string(), &k.to_string());
                 if score > 0 {
                     println!("\n\nDISTANCE:\n{}\n{}\n{}\n\n", &ref_seg, pp(&ops), &k);

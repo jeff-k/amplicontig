@@ -28,10 +28,16 @@ use std::cmp;
 /// Determine the index of overlap for two reads.
 #[inline]
 pub fn mate(r1: &SeqSlice<Dna>, r2: &SeqSlice<Dna>, hint: usize, indel: usize) -> Option<usize> {
-    let x = (r1.len() - hint) * 2;
+    let x = if hint > r1.len() {
+        0
+    } else {
+        (r1.len() - hint) * 2
+    };
+
     if x >= r1.len() {
         return None;
     }
+
     let mut m: i16 = score(&r2[..x], &r1[r1.len() - x..]);
     let mut overlap: usize = r1.len() - x;
 
