@@ -84,7 +84,7 @@ pub enum Cigar {
     Del,
 }
 
-pub fn edit_dist(a: &str, b: &str) -> (usize, Vec<Cigar>) {
+pub fn edit_dist(a: &str, b: &str) -> (usize, Vec<(usize, Cigar)>) {
     let a_len = a.len();
     let b_len = b.len();
     let mut dp = vec![vec![0; b_len + 1]; a_len + 1];
@@ -136,7 +136,21 @@ pub fn edit_dist(a: &str, b: &str) -> (usize, Vec<Cigar>) {
             };
         }
     }
-    (dp[a_len][b_len], ops[a_len][b_len].clone())
+    (
+        dp[a_len][b_len],
+        ops[a_len][b_len].iter().fold(Vec::new(), |mut acc, &op| {
+            if let Some((count, last_op)) = acc.last_mut() {
+                if *last_op == op {
+                    *count += 1;
+                } else {
+                    acc.push((1, op));
+                }
+            } else {
+                acc.push((1, op));
+            }
+            acc
+        }),
+    )
 }
 
 #[derive(Debug)]

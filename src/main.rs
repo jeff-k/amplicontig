@@ -150,7 +150,12 @@ fn main() {
             if v.count > 5 {
                 let (score, ops) = edit_dist(&ref_seg.to_string(), &k.to_string());
                 if score > 0 {
-                    println!("\n\nDISTANCE:\n{}\n{}\n{}\n\n", &ref_seg, pp(&ops), &k);
+                    println!(
+                        "\n\nDISTANCE:\n{}\n{}\n{}\n\n",
+                        &ref_seg,
+                        pp(&ops.iter().map(|(_, op)| *op).collect()),
+                        &k
+                    );
                 }
                 println!(
                     ">{}-{},ref_length:{},count:{},lenth:{}\n{}",
